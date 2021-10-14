@@ -242,7 +242,7 @@ func TestPartnerWantHaveWantBlockNonActive(t *testing.T) {
 	bs := blockstore.NewBlockstore(dssync.MutexWrap(ds.NewMapDatastore()))
 	for _, letter := range strings.Split(alphabet, "") {
 		block := blocks.NewBlock([]byte(letter))
-		if err := bs.Put(block); err != nil {
+		if err := bs.Put(context.Background(), block); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -581,7 +581,7 @@ func TestPartnerWantHaveWantBlockActive(t *testing.T) {
 	bs := blockstore.NewBlockstore(dssync.MutexWrap(ds.NewMapDatastore()))
 	for _, letter := range strings.Split(alphabet, "") {
 		block := blocks.NewBlock([]byte(letter))
-		if err := bs.Put(block); err != nil {
+		if err := bs.Put(context.Background(), block); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -881,7 +881,7 @@ func TestPartnerWantsThenCancels(t *testing.T) {
 	bs := blockstore.NewBlockstore(dssync.MutexWrap(ds.NewMapDatastore()))
 	for _, letter := range alphabet {
 		block := blocks.NewBlock([]byte(letter))
-		if err := bs.Put(block); err != nil {
+		if err := bs.Put(context.Background(), block); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -933,7 +933,7 @@ func TestSendReceivedBlocksToPeersThatWantThem(t *testing.T) {
 		t.Fatal("expected no envelope yet")
 	}
 
-	if err := bs.PutMany([]blocks.Block{blks[0], blks[2]}); err != nil {
+	if err := bs.PutMany(context.Background(), []blocks.Block{blks[0], blks[2]}); err != nil {
 		t.Fatal(err)
 	}
 	e.ReceiveFrom(otherPeer, []blocks.Block{blks[0], blks[2]})
@@ -997,7 +997,7 @@ func TestSendDontHave(t *testing.T) {
 	}
 
 	// Receive all the blocks
-	if err := bs.PutMany(blks); err != nil {
+	if err := bs.PutMany(context.Background(), blks); err != nil {
 		t.Fatal(err)
 	}
 	e.ReceiveFrom(otherPeer, blks)
@@ -1063,7 +1063,7 @@ func TestTaggingPeers(t *testing.T) {
 	keys := []string{"a", "b", "c", "d", "e"}
 	for _, letter := range keys {
 		block := blocks.NewBlock([]byte(letter))
-		if err := sanfrancisco.Blockstore.Put(block); err != nil {
+		if err := sanfrancisco.Blockstore.Put(context.Background(), block); err != nil {
 			t.Fatal(err)
 		}
 	}
