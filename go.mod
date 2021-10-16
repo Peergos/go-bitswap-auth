@@ -12,7 +12,6 @@ require (
 	github.com/ipfs/go-ipfs-blockstore v0.1.6
 	github.com/ipfs/go-ipfs-blocksutil v0.0.1
 	github.com/ipfs/go-ipfs-delay v0.0.1
-	github.com/ipfs/go-ipfs-exchange-interface v0.0.1
 	github.com/ipfs/go-ipfs-routing v0.1.0
 	github.com/ipfs/go-ipfs-util v0.0.2
 	github.com/ipfs/go-log v1.0.5
@@ -28,6 +27,7 @@ require (
 	github.com/libp2p/go-msgio v0.0.6
 	github.com/multiformats/go-multiaddr v0.3.3
 	github.com/multiformats/go-multistream v0.2.2
+	github.com/peergos/go-ipfs-exchange-interface-auth v0.1.0
 	github.com/stretchr/testify v1.7.0
 	go.uber.org/zap v1.16.0
 )

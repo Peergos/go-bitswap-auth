@@ -30,7 +30,7 @@ import (
 	blocks "github.com/ipfs/go-block-format"
 	"github.com/ipfs/go-cid"
 	blockstore "github.com/ipfs/go-ipfs-blockstore"
-	exchange "github.com/ipfs/go-ipfs-exchange-interface"
+	exchange "github.com/peergos/go-ipfs-exchange-interface-auth"
 	logging "github.com/ipfs/go-log"
 	"github.com/ipfs/go-metrics-interface"
 	process "github.com/jbenet/goprocess"
@@ -389,8 +389,8 @@ type counters struct {
 
 // GetBlock attempts to retrieve a particular block from peers within the
 // deadline enforced by the context.
-func (bs *Bitswap) GetBlock(parent context.Context, k cid.Cid) (blocks.Block, error) {
-	return bsgetter.SyncGetBlock(parent, k, bs.GetBlocks)
+func (bs *Bitswap) GetBlock(parent context.Context, k cid.Cid, auth string) (blocks.Block, error) {
+	return bsgetter.SyncGetBlock(parent, k, auth, bs.GetBlocks)
 }
 
 // WantlistForPeer returns the currently understood list of blocks requested by a
@@ -416,9 +416,9 @@ func (bs *Bitswap) LedgerForPeer(p peer.ID) *decision.Receipt {
 // NB: Your request remains open until the context expires. To conserve
 // resources, provide a context with a reasonably short deadline (ie. not one
 // that lasts throughout the lifetime of the server)
-func (bs *Bitswap) GetBlocks(ctx context.Context, keys []cid.Cid) (<-chan blocks.Block, error) {
+func (bs *Bitswap) GetBlocks(ctx context.Context, keys []cid.Cid, auth []string) (<-chan blocks.Block, error) {
 	session := bs.sm.NewSession(ctx, bs.provSearchDelay, bs.rebroadcastDelay)
-	return session.GetBlocks(ctx, keys)
+	return session.GetBlocks(ctx, keys, auth)
 }
 
 // HasBlock announces the existence of a block to this bitswap service. The

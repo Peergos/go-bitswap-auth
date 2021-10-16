@@ -12,7 +12,7 @@ import (
 	notifications "github.com/ipfs/go-bitswap/internal/notifications"
 	bssession "github.com/ipfs/go-bitswap/internal/session"
 	bssim "github.com/ipfs/go-bitswap/internal/sessioninterestmanager"
-	exchange "github.com/ipfs/go-ipfs-exchange-interface"
+	exchange "github.com/peergos/go-ipfs-exchange-interface-auth"
 	peer "github.com/libp2p/go-libp2p-core/peer"
 )
 

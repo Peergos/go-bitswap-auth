@@ -228,14 +228,14 @@ func (s *Session) logReceiveFrom(from peer.ID, interestedKs []cid.Cid, haves []c
 }
 
 // GetBlock fetches a single block.
-func (s *Session) GetBlock(parent context.Context, k cid.Cid) (blocks.Block, error) {
-	return bsgetter.SyncGetBlock(parent, k, s.GetBlocks)
+func (s *Session) GetBlock(parent context.Context, k cid.Cid, auth string) (blocks.Block, error) {
+	return bsgetter.SyncGetBlock(parent, k, auth, s.GetBlocks)
 }
 
 // GetBlocks fetches a set of blocks within the context of this session and
 // returns a channel that found blocks will be returned on. No order is
 // guaranteed on the returned blocks.
-func (s *Session) GetBlocks(ctx context.Context, keys []cid.Cid) (<-chan blocks.Block, error) {
+func (s *Session) GetBlocks(ctx context.Context, keys []cid.Cid, auth []string) (<-chan blocks.Block, error) {
 	ctx = logging.ContextWithLoggable(ctx, s.uuid)
 
 	return bsgetter.AsyncGetBlocks(ctx, s.ctx, keys, s.notif,

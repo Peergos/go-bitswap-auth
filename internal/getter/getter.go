@@ -16,12 +16,12 @@ var log = logging.Logger("bitswap")
 
 // GetBlocksFunc is any function that can take an array of CIDs and return a
 // channel of incoming blocks.
-type GetBlocksFunc func(context.Context, []cid.Cid) (<-chan blocks.Block, error)
+type GetBlocksFunc func(context.Context, []cid.Cid, []string) (<-chan blocks.Block, error)
 
 // SyncGetBlock takes a block cid and an async function for getting several
 // blocks that returns a channel, and uses that function to return the
 // block syncronously.
-func SyncGetBlock(p context.Context, k cid.Cid, gb GetBlocksFunc) (blocks.Block, error) {
+func SyncGetBlock(p context.Context, k cid.Cid, auth string, gb GetBlocksFunc) (blocks.Block, error) {
 	if !k.Defined() {
 		log.Error("undefined cid in GetBlock")
 		return nil, blockstore.ErrNotFound
@@ -36,7 +36,7 @@ func SyncGetBlock(p context.Context, k cid.Cid, gb GetBlocksFunc) (blocks.Block,
 	ctx, cancel := context.WithCancel(p)
 	defer cancel()
 
-	promise, err := gb(ctx, []cid.Cid{k})
+	promise, err := gb(ctx, []cid.Cid{k}, []string{auth})
 	if err != nil {
 		return nil, err
 	}
