@@ -8,7 +8,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	bsmsg "github.com/ipfs/go-bitswap/message"
+	bsmsg "github.com/peergos/go-bitswap-auth/message"
 
 	cid "github.com/ipfs/go-cid"
 	logging "github.com/ipfs/go-log"
@@ -407,6 +407,7 @@ func (bsnet *impl) handleNewStream(s network.Stream) {
 	for {
 		received, err := bsmsg.FromMsgReader(reader)
 		if err != nil {
+			fmt.Println(err)
 			if err != io.EOF {
 				_ = s.Reset()
 				bsnet.receiver.ReceiveError(err)

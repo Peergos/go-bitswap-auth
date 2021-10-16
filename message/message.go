@@ -3,18 +3,20 @@ package message
 import (
 	"encoding/binary"
 	"errors"
+        "encoding/hex"
 	"io"
+	"strings"
 
-	pb "github.com/ipfs/go-bitswap/message/pb"
-	"github.com/ipfs/go-bitswap/wantlist"
+	pb "github.com/peergos/go-bitswap-auth/message/pb"
+	"github.com/peergos/go-bitswap-auth/wantlist"
 
 	blocks "github.com/ipfs/go-block-format"
 	cid "github.com/ipfs/go-cid"
-	pool "github.com/libp2p/go-buffer-pool"
-	msgio "github.com/libp2p/go-msgio"
-
 	u "github.com/ipfs/go-ipfs-util"
+	pool "github.com/libp2p/go-buffer-pool"
 	"github.com/libp2p/go-libp2p-core/network"
+	msgio "github.com/libp2p/go-msgio"
+	"github.com/peergos/go-bitswap-auth/auth"
 )
 
 // BitSwapMessage is the basic interface for interacting building, encoding,
@@ -25,28 +27,28 @@ type BitSwapMessage interface {
 	Wantlist() []Entry
 
 	// Blocks returns a slice of unique blocks.
-	Blocks() []blocks.Block
+	Blocks() []auth.AuthBlock
 	// BlockPresences returns the list of HAVE / DONT_HAVE in the message
 	BlockPresences() []BlockPresence
 	// Haves returns the Cids for each HAVE
-	Haves() []cid.Cid
+	Haves() []auth.Want
 	// DontHaves returns the Cids for each DONT_HAVE
-	DontHaves() []cid.Cid
+	DontHaves() []auth.Want
 	// PendingBytes returns the number of outstanding bytes of data that the
 	// engine has yet to send to the client (because they didn't fit in this
 	// message)
 	PendingBytes() int32
 
 	// AddEntry adds an entry to the Wantlist.
-	AddEntry(key cid.Cid, priority int32, wantType pb.Message_Wantlist_WantType, sendDontHave bool) int
+	AddEntry(key auth.Want, priority int32, wantType pb.Message_Wantlist_WantType, sendDontHave bool) int
 
 	// Cancel adds a CANCEL for the given CID to the message
 	// Returns the size of the CANCEL entry in the protobuf
-	Cancel(key cid.Cid) int
+	Cancel(w auth.Want) int
 
 	// Remove removes any entries for the given CID. Useful when the want
 	// status for the CID changes when preparing a message.
-	Remove(key cid.Cid)
+	Remove(key auth.Want)
 
 	// Empty indicates whether the message has any information
 	Empty() bool
@@ -56,14 +58,14 @@ type BitSwapMessage interface {
 	// A full wantlist is an authoritative copy, a 'non-full' wantlist is a patch-set
 	Full() bool
 
-	// AddBlock adds a block to the message
-	AddBlock(blocks.Block)
+	// AddBlock adds a block to the message, with the auth that released it
+	AddBlock(blocks.Block, string)
 	// AddBlockPresence adds a HAVE / DONT_HAVE for the given Cid to the message
-	AddBlockPresence(cid.Cid, pb.Message_BlockPresenceType)
+	AddBlockPresence(auth.Want, pb.Message_BlockPresenceType)
 	// AddHave adds a HAVE for the given Cid to the message
-	AddHave(cid.Cid)
+	AddHave(auth.Want)
 	// AddDontHave adds a DONT_HAVE for the given Cid to the message
-	AddDontHave(cid.Cid)
+	AddDontHave(auth.Want)
 	// SetPendingBytes sets the number of bytes of data that are yet to be sent
 	// to the client (because they didn't fit in this message)
 	SetPendingBytes(int32)
@@ -92,7 +94,7 @@ type Exportable interface {
 
 // BlockPresence represents a HAVE / DONT_HAVE for a given Cid
 type BlockPresence struct {
-	Cid  cid.Cid
+	Want auth.Want
 	Type pb.Message_BlockPresenceType
 }
 
@@ -114,8 +116,10 @@ func (e *Entry) Size() int {
 
 // Get the entry in protobuf form
 func (e *Entry) ToPB() pb.Message_Wantlist_Entry {
+        auth,_ := hex.DecodeString(e.Want.Auth)
 	return pb.Message_Wantlist_Entry{
-		Block:        pb.Cid{Cid: e.Cid},
+		Block:        pb.Cid{Cid: e.Want.Cid},
+		Auth:         auth,
 		Priority:     int32(e.Priority),
 		Cancel:       e.Cancel,
 		WantType:     e.WantType,
@@ -129,9 +133,10 @@ func maxEntrySize() int {
 	var maxInt32 int32 = (1 << 31) - 1
 
 	c := cid.NewCidV0(u.Hash([]byte("cid")))
+	a := strings.Repeat("A", 120)
 	e := Entry{
 		Entry: wantlist.Entry{
-			Cid:      c,
+			Want:     auth.Want{Cid: c, Auth: a},
 			Priority: maxInt32,
 			WantType: pb.Message_Wantlist_Have,
 		},
@@ -143,9 +148,10 @@ func maxEntrySize() int {
 
 type impl struct {
 	full           bool
-	wantlist       map[cid.Cid]*Entry
-	blocks         map[cid.Cid]blocks.Block
-	blockPresences map[cid.Cid]pb.Message_BlockPresenceType
+	wantlist       map[auth.Want]*Entry
+	blocks         map[auth.Want]auth.AuthBlock
+	rawData        map[auth.Want][]byte
+	blockPresences map[auth.Want]pb.Message_BlockPresenceType
 	pendingBytes   int32
 }
 
@@ -157,9 +163,10 @@ func New(full bool) BitSwapMessage {
 func newMsg(full bool) *impl {
 	return &impl{
 		full:           full,
-		wantlist:       make(map[cid.Cid]*Entry),
-		blocks:         make(map[cid.Cid]blocks.Block),
-		blockPresences: make(map[cid.Cid]pb.Message_BlockPresenceType),
+		wantlist:       make(map[auth.Want]*Entry),
+		blocks:         make(map[auth.Want]auth.AuthBlock),
+		rawData:        make(map[auth.Want][]byte),
+		blockPresences: make(map[auth.Want]pb.Message_BlockPresenceType),
 	}
 }
 
@@ -202,14 +209,14 @@ func newMessageFromProto(pbm pb.Message) (BitSwapMessage, error) {
 		if !e.Block.Cid.Defined() {
 			return nil, errCidMissing
 		}
-		m.addEntry(e.Block.Cid, e.Priority, e.Cancel, e.WantType, e.SendDontHave)
+		m.addEntry(auth.Want{Cid: e.Block.Cid, Auth: hex.EncodeToString(e.Auth)}, e.Priority, e.Cancel, e.WantType, e.SendDontHave)
 	}
 
 	// deprecated
 	for _, d := range pbm.Blocks {
 		// CIDv0, sha256, protobuf only
 		b := blocks.NewBlock(d)
-		m.AddBlock(b)
+		m.AddBlock(b, "")
 	}
 	//
 
@@ -229,14 +236,15 @@ func newMessageFromProto(pbm pb.Message) (BitSwapMessage, error) {
 			return nil, err
 		}
 
-		m.AddBlock(blk)
+		m.AddBlock(blk, hex.EncodeToString(b.Auth))
 	}
 
 	for _, bi := range pbm.GetBlockPresences() {
 		if !bi.Cid.Cid.Defined() {
 			return nil, errCidMissing
 		}
-		m.AddBlockPresence(bi.Cid.Cid, bi.Type)
+		w := auth.Want{Cid: bi.Cid.Cid, Auth: hex.EncodeToString(bi.Auth)}
+		m.AddBlockPresence(w, bi.Type)
 	}
 
 	m.pendingBytes = pbm.PendingBytes
@@ -260,8 +268,8 @@ func (m *impl) Wantlist() []Entry {
 	return out
 }
 
-func (m *impl) Blocks() []blocks.Block {
-	bs := make([]blocks.Block, 0, len(m.blocks))
+func (m *impl) Blocks() []auth.AuthBlock {
+	bs := make([]auth.AuthBlock, 0, len(m.blocks))
 	for _, block := range m.blocks {
 		bs = append(bs, block)
 	}
@@ -276,16 +284,16 @@ func (m *impl) BlockPresences() []BlockPresence {
 	return bps
 }
 
-func (m *impl) Haves() []cid.Cid {
+func (m *impl) Haves() []auth.Want {
 	return m.getBlockPresenceByType(pb.Message_Have)
 }
 
-func (m *impl) DontHaves() []cid.Cid {
+func (m *impl) DontHaves() []auth.Want {
 	return m.getBlockPresenceByType(pb.Message_DontHave)
 }
 
-func (m *impl) getBlockPresenceByType(t pb.Message_BlockPresenceType) []cid.Cid {
-	cids := make([]cid.Cid, 0, len(m.blockPresences))
+func (m *impl) getBlockPresenceByType(t pb.Message_BlockPresenceType) []auth.Want {
+	cids := make([]auth.Want, 0, len(m.blockPresences))
 	for c, bpt := range m.blockPresences {
 		if bpt == t {
 			cids = append(cids, c)
@@ -302,20 +310,20 @@ func (m *impl) SetPendingBytes(pendingBytes int32) {
 	m.pendingBytes = pendingBytes
 }
 
-func (m *impl) Remove(k cid.Cid) {
-	delete(m.wantlist, k)
+func (m *impl) Remove(w auth.Want) {
+	delete(m.wantlist, w)
 }
 
-func (m *impl) Cancel(k cid.Cid) int {
-	return m.addEntry(k, 0, true, pb.Message_Wantlist_Block, false)
+func (m *impl) Cancel(w auth.Want) int {
+	return m.addEntry(w, 0, true, pb.Message_Wantlist_Block, false)
 }
 
-func (m *impl) AddEntry(k cid.Cid, priority int32, wantType pb.Message_Wantlist_WantType, sendDontHave bool) int {
-	return m.addEntry(k, priority, false, wantType, sendDontHave)
+func (m *impl) AddEntry(w auth.Want, priority int32, wantType pb.Message_Wantlist_WantType, sendDontHave bool) int {
+	return m.addEntry(w, priority, false, wantType, sendDontHave)
 }
 
-func (m *impl) addEntry(c cid.Cid, priority int32, cancel bool, wantType pb.Message_Wantlist_WantType, sendDontHave bool) int {
-	e, exists := m.wantlist[c]
+func (m *impl) addEntry(w auth.Want, priority int32, cancel bool, wantType pb.Message_Wantlist_WantType, sendDontHave bool) int {
+	e, exists := m.wantlist[w]
 	if exists {
 		// Only change priority if want is of the same type
 		if e.WantType == wantType {
@@ -333,48 +341,50 @@ func (m *impl) addEntry(c cid.Cid, priority int32, cancel bool, wantType pb.Mess
 		if wantType == pb.Message_Wantlist_Block && e.WantType == pb.Message_Wantlist_Have {
 			e.WantType = wantType
 		}
-		m.wantlist[c] = e
+		m.wantlist[w] = e
 		return 0
 	}
 
 	e = &Entry{
 		Entry: wantlist.Entry{
-			Cid:      c,
+			Want:     w,
 			Priority: priority,
 			WantType: wantType,
 		},
 		SendDontHave: sendDontHave,
 		Cancel:       cancel,
 	}
-	m.wantlist[c] = e
+	m.wantlist[w] = e
 
 	return e.Size()
 }
 
-func (m *impl) AddBlock(b blocks.Block) {
-	delete(m.blockPresences, b.Cid())
-	m.blocks[b.Cid()] = b
+func (m *impl) AddBlock(b blocks.Block, a string) {
+	w := auth.Want{Cid: b.Cid(), Auth: a}
+	delete(m.blockPresences, w)
+	m.blocks[w] = auth.NewBlock(b, a)
+	m.rawData[w] = b.RawData()
 }
 
-func (m *impl) AddBlockPresence(c cid.Cid, t pb.Message_BlockPresenceType) {
+func (m *impl) AddBlockPresence(c auth.Want, t pb.Message_BlockPresenceType) {
 	if _, ok := m.blocks[c]; ok {
 		return
 	}
 	m.blockPresences[c] = t
 }
 
-func (m *impl) AddHave(c cid.Cid) {
+func (m *impl) AddHave(c auth.Want) {
 	m.AddBlockPresence(c, pb.Message_Have)
 }
 
-func (m *impl) AddDontHave(c cid.Cid) {
+func (m *impl) AddDontHave(c auth.Want) {
 	m.AddBlockPresence(c, pb.Message_DontHave)
 }
 
 func (m *impl) Size() int {
 	size := 0
 	for _, block := range m.blocks {
-		size += len(block.RawData())
+		size += block.Size()
 	}
 	for c := range m.blockPresences {
 		size += BlockPresenceSize(c)
@@ -386,9 +396,11 @@ func (m *impl) Size() int {
 	return size
 }
 
-func BlockPresenceSize(c cid.Cid) int {
+func BlockPresenceSize(w auth.Want) int {
+        auth,_ := hex.DecodeString(w.Auth)
 	return (&pb.Message_BlockPresence{
-		Cid:  pb.Cid{Cid: c},
+		Cid:  pb.Cid{Cid: w.Cid},
+		Auth: auth,
 		Type: pb.Message_Have,
 	}).Size()
 }
@@ -426,8 +438,8 @@ func (m *impl) ToProtoV0() *pb.Message {
 
 	blocks := m.Blocks()
 	pbm.Blocks = make([][]byte, 0, len(blocks))
-	for _, b := range blocks {
-		pbm.Blocks = append(pbm.Blocks, b.RawData())
+	for c, _ := range m.blocks {
+		pbm.Blocks = append(pbm.Blocks, m.rawData[c])
 	}
 	return pbm
 }
@@ -442,17 +454,21 @@ func (m *impl) ToProtoV1() *pb.Message {
 
 	blocks := m.Blocks()
 	pbm.Payload = make([]pb.Message_Block, 0, len(blocks))
-	for _, b := range blocks {
+	for c, b := range m.blocks {
+                auth,_ := hex.DecodeString(b.Want().Auth)
 		pbm.Payload = append(pbm.Payload, pb.Message_Block{
-			Data:   b.RawData(),
+			Data:   m.rawData[c],
 			Prefix: b.Cid().Prefix().Bytes(),
+			Auth:   auth,
 		})
 	}
 
 	pbm.BlockPresences = make([]pb.Message_BlockPresence, 0, len(m.blockPresences))
 	for c, t := range m.blockPresences {
+                auth,_ := hex.DecodeString(c.Auth)
 		pbm.BlockPresences = append(pbm.BlockPresences, pb.Message_BlockPresence{
-			Cid:  pb.Cid{Cid: c},
+			Cid:  pb.Cid{Cid: c.Cid},
+			Auth: auth,
 			Type: t,
 		})
 	}

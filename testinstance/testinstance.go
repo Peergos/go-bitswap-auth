@@ -4,9 +4,7 @@ import (
 	"context"
 	"time"
 
-	bitswap "github.com/ipfs/go-bitswap"
-	bsnet "github.com/ipfs/go-bitswap/network"
-	tn "github.com/ipfs/go-bitswap/testnet"
+	cid "github.com/ipfs/go-cid"
 	ds "github.com/ipfs/go-datastore"
 	delayed "github.com/ipfs/go-datastore/delayed"
 	ds_sync "github.com/ipfs/go-datastore/sync"
@@ -15,11 +13,15 @@ import (
 	peer "github.com/libp2p/go-libp2p-core/peer"
 	p2ptestutil "github.com/libp2p/go-libp2p-netutil"
 	tnet "github.com/libp2p/go-libp2p-testing/net"
+	bitswap "github.com/peergos/go-bitswap-auth"
+	auth "github.com/peergos/go-bitswap-auth/auth"
+	bsnet "github.com/peergos/go-bitswap-auth/network"
+	tn "github.com/peergos/go-bitswap-auth/testnet"
 )
 
 // NewTestInstanceGenerator generates a new InstanceGenerator for the given
 // testnet
-func NewTestInstanceGenerator(net tn.Network, netOptions []bsnet.NetOpt, bsOptions []bitswap.Option) InstanceGenerator {
+func NewTestInstanceGenerator(net tn.Network, netOptions []bsnet.NetOpt, bsOptions []bitswap.Option, allowGen func(int) func(cid.Cid, []byte, peer.ID, string) bool) InstanceGenerator {
 	ctx, cancel := context.WithCancel(context.Background())
 	return InstanceGenerator{
 		net:        net,
@@ -28,6 +30,7 @@ func NewTestInstanceGenerator(net tn.Network, netOptions []bsnet.NetOpt, bsOptio
 		cancel:     cancel,
 		bsOptions:  bsOptions,
 		netOptions: netOptions,
+		allowGen:   allowGen,
 	}
 }
 
@@ -39,6 +42,7 @@ type InstanceGenerator struct {
 	cancel     context.CancelFunc
 	bsOptions  []bitswap.Option
 	netOptions []bsnet.NetOpt
+	allowGen   func(int) func(cid.Cid, []byte, peer.ID, string) bool
 }
 
 // Close closes the clobal context, shutting down all test instances
@@ -54,18 +58,30 @@ func (g *InstanceGenerator) Next() Instance {
 	if err != nil {
 		panic("FIXME") // TODO change signature
 	}
-	return NewInstance(g.ctx, g.net, p, g.netOptions, g.bsOptions)
+	return NewInstance(g.ctx, g.net, p, g.netOptions, g.bsOptions, g.allowGen(g.seq-1))
 }
 
 // Instances creates N test instances of bitswap + dependencies and connects
 // them to each other
 func (g *InstanceGenerator) Instances(n int) []Instance {
+	return g.instances(n, true)
+}
+
+// Instances creates N test instances of bitswap + dependencies and connects
+// them to each other
+func (g *InstanceGenerator) UnconnectedInstances(n int) []Instance {
+	return g.instances(n, false)
+}
+
+func (g *InstanceGenerator) instances(n int, connect bool) []Instance {
 	var instances []Instance
 	for j := 0; j < n; j++ {
 		inst := g.Next()
 		instances = append(instances, inst)
 	}
-	ConnectInstances(instances)
+	if connect {
+		ConnectInstances(instances)
+	}
 	return instances
 }
 
@@ -86,13 +102,13 @@ func ConnectInstances(instances []Instance) {
 type Instance struct {
 	Peer            peer.ID
 	Exchange        *bitswap.Bitswap
-	blockstore      blockstore.Blockstore
+	blockstore      auth.AuthBlockstore
 	Adapter         bsnet.BitSwapNetwork
 	blockstoreDelay delay.D
 }
 
 // Blockstore returns the block store for this test instance
-func (i *Instance) Blockstore() blockstore.Blockstore {
+func (i *Instance) Blockstore() auth.AuthBlockstore {
 	return i.blockstore
 }
 
@@ -107,7 +123,7 @@ func (i *Instance) SetBlockstoreLatency(t time.Duration) time.Duration {
 // NB: It's easy make mistakes by providing the same peer ID to two different
 // instances. To safeguard, use the InstanceGenerator to generate instances. It's
 // just a much better idea.
-func NewInstance(ctx context.Context, net tn.Network, p tnet.Identity, netOptions []bsnet.NetOpt, bsOptions []bitswap.Option) Instance {
+func NewInstance(ctx context.Context, net tn.Network, p tnet.Identity, netOptions []bsnet.NetOpt, bsOptions []bitswap.Option, allow func(cid.Cid, []byte, peer.ID, string) bool) Instance {
 	bsdelay := delay.Fixed(0)
 
 	adapter := net.Adapter(p, netOptions...)
@@ -120,13 +136,15 @@ func NewInstance(ctx context.Context, net tn.Network, p tnet.Identity, netOption
 		panic(err.Error()) // FIXME perhaps change signature and return error.
 	}
 
-	bs := bitswap.New(ctx, adapter, bstore, bsOptions...).(*bitswap.Bitswap)
+	authbstore := auth.NewAuthBlockstore(bstore, allow)
+
+	bs := bitswap.New(ctx, adapter, authbstore, bsOptions...).(*bitswap.Bitswap)
 
 	return Instance{
 		Adapter:         adapter,
 		Peer:            p.ID(),
 		Exchange:        bs,
-		blockstore:      bstore,
+		blockstore:      authbstore,
 		blockstoreDelay: bsdelay,
 	}
 }

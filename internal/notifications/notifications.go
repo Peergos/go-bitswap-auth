@@ -5,8 +5,8 @@ import (
 	"sync"
 
 	pubsub "github.com/cskr/pubsub"
-	blocks "github.com/ipfs/go-block-format"
 	cid "github.com/ipfs/go-cid"
+	"github.com/peergos/go-bitswap-auth/auth"
 )
 
 const bufferSize = 16
@@ -15,8 +15,8 @@ const bufferSize = 16
 // for cids. It's used internally by bitswap to decouple receiving blocks
 // and actually providing them back to the GetBlocks caller.
 type PubSub interface {
-	Publish(block blocks.Block)
-	Subscribe(ctx context.Context, keys ...cid.Cid) <-chan blocks.Block
+	Publish(block auth.AuthBlock)
+	Subscribe(ctx context.Context, keys ...cid.Cid) <-chan auth.AuthBlock
 	Shutdown()
 }
 
@@ -35,7 +35,7 @@ type impl struct {
 	closed chan struct{}
 }
 
-func (ps *impl) Publish(block blocks.Block) {
+func (ps *impl) Publish(block auth.AuthBlock) {
 	ps.lk.RLock()
 	defer ps.lk.RUnlock()
 	select {
@@ -62,9 +62,9 @@ func (ps *impl) Shutdown() {
 // Subscribe returns a channel of blocks for the given |keys|. |blockChannel|
 // is closed if the |ctx| times out or is cancelled, or after receiving the blocks
 // corresponding to |keys|.
-func (ps *impl) Subscribe(ctx context.Context, keys ...cid.Cid) <-chan blocks.Block {
+func (ps *impl) Subscribe(ctx context.Context, keys ...cid.Cid) <-chan auth.AuthBlock {
 
-	blocksCh := make(chan blocks.Block, len(keys))
+	blocksCh := make(chan auth.AuthBlock, len(keys))
 	valuesCh := make(chan interface{}, len(keys)) // provide our own channel to control buffer, prevent blocking
 	if len(keys) == 0 {
 		close(blocksCh)
@@ -111,7 +111,8 @@ func (ps *impl) Subscribe(ctx context.Context, keys ...cid.Cid) <-chan blocks.Bl
 				if !ok {
 					return
 				}
-				block, ok := val.(blocks.Block)
+				block, ok := val.(auth.AuthBlock)
+
 				if !ok {
 					return
 				}

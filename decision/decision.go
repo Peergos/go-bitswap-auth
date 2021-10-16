@@ -1,6 +1,6 @@
 package decision
 
-import intdec "github.com/ipfs/go-bitswap/internal/decision"
+import intdec "github.com/peergos/go-bitswap-auth/internal/decision"
 
 // Expose Receipt externally
 type Receipt = intdec.Receipt

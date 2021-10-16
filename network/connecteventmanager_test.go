@@ -3,8 +3,8 @@ package network
 import (
 	"testing"
 
-	"github.com/ipfs/go-bitswap/internal/testutil"
 	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/peergos/go-bitswap-auth/internal/testutil"
 )
 
 type mockConnListener struct {

@@ -6,17 +6,17 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ipfs/go-bitswap/internal/testutil"
-	cid "github.com/ipfs/go-cid"
+	"github.com/peergos/go-bitswap-auth/auth"
+	"github.com/peergos/go-bitswap-auth/internal/testutil"
 
 	"github.com/libp2p/go-libp2p-core/peer"
 )
 
 type msg struct {
 	p          peer.ID
-	wantBlocks []cid.Cid
-	wantHaves  []cid.Cid
-	cancels    []cid.Cid
+	wantBlocks []auth.Want
+	wantHaves  []auth.Want
+	cancels    []auth.Want
 }
 
 type mockPeerQueue struct {
@@ -27,22 +27,22 @@ type mockPeerQueue struct {
 func (fp *mockPeerQueue) Startup()  {}
 func (fp *mockPeerQueue) Shutdown() {}
 
-func (fp *mockPeerQueue) AddBroadcastWantHaves(whs []cid.Cid) {
+func (fp *mockPeerQueue) AddBroadcastWantHaves(whs []auth.Want) {
 	fp.msgs <- msg{fp.p, nil, whs, nil}
 }
-func (fp *mockPeerQueue) AddWants(wbs []cid.Cid, whs []cid.Cid) {
+func (fp *mockPeerQueue) AddWants(wbs []auth.Want, whs []auth.Want) {
 	fp.msgs <- msg{fp.p, wbs, whs, nil}
 }
-func (fp *mockPeerQueue) AddCancels(cs []cid.Cid) {
+func (fp *mockPeerQueue) AddCancels(cs []auth.Want) {
 	fp.msgs <- msg{fp.p, nil, nil, cs}
 }
-func (fp *mockPeerQueue) ResponseReceived(ks []cid.Cid) {
+func (fp *mockPeerQueue) ResponseReceived(ks []auth.Want) {
 }
 
 type peerWants struct {
-	wantHaves  []cid.Cid
-	wantBlocks []cid.Cid
-	cancels    []cid.Cid
+	wantHaves  []auth.Want
+	wantBlocks []auth.Want
+	cancels    []auth.Want
 }
 
 func collectMessages(ch chan msg, timeout time.Duration) map[peer.ID]peerWants {
@@ -128,7 +128,7 @@ func TestBroadcastOnConnect(t *testing.T) {
 	self, peer1 := tp[0], tp[1]
 	peerManager := New(ctx, peerQueueFactory, self)
 
-	cids := testutil.GenerateCids(2)
+	cids := testutil.GenerateWants(2)
 	peerManager.BroadcastWantHaves(ctx, cids)
 
 	// Connect with two broadcast wants for first peer
@@ -149,7 +149,7 @@ func TestBroadcastWantHaves(t *testing.T) {
 	self, peer1, peer2 := tp[0], tp[1], tp[2]
 	peerManager := New(ctx, peerQueueFactory, self)
 
-	cids := testutil.GenerateCids(3)
+	cids := testutil.GenerateWants(3)
 
 	// Broadcast the first two.
 	peerManager.BroadcastWantHaves(ctx, cids[:2])
@@ -167,7 +167,7 @@ func TestBroadcastWantHaves(t *testing.T) {
 
 	// Send a broadcast to all peers, including cid that was already sent to
 	// first peer
-	peerManager.BroadcastWantHaves(ctx, []cid.Cid{cids[0], cids[2]})
+	peerManager.BroadcastWantHaves(ctx, []auth.Want{cids[0], cids[2]})
 	collected = collectMessages(msgs, 2*time.Millisecond)
 
 	// One of the want-haves was already sent to peer1
@@ -189,10 +189,10 @@ func TestSendWants(t *testing.T) {
 	tp := testutil.GeneratePeers(2)
 	self, peer1 := tp[0], tp[1]
 	peerManager := New(ctx, peerQueueFactory, self)
-	cids := testutil.GenerateCids(4)
+	cids := testutil.GenerateWants(4)
 
 	peerManager.Connected(peer1)
-	peerManager.SendWants(ctx, peer1, []cid.Cid{cids[0]}, []cid.Cid{cids[2]})
+	peerManager.SendWants(ctx, peer1, []auth.Want{cids[0]}, []auth.Want{cids[2]})
 	collected := collectMessages(msgs, 2*time.Millisecond)
 
 	if len(collected[peer1].wantHaves) != 1 {
@@ -202,7 +202,7 @@ func TestSendWants(t *testing.T) {
 		t.Fatal("Expected want-block to be sent to peer")
 	}
 
-	peerManager.SendWants(ctx, peer1, []cid.Cid{cids[0], cids[1]}, []cid.Cid{cids[2], cids[3]})
+	peerManager.SendWants(ctx, peer1, []auth.Want{cids[0], cids[1]}, []auth.Want{cids[2], cids[3]})
 	collected = collectMessages(msgs, 2*time.Millisecond)
 
 	// First want-have and want-block should be filtered (because they were
@@ -223,20 +223,20 @@ func TestSendCancels(t *testing.T) {
 	tp := testutil.GeneratePeers(3)
 	self, peer1, peer2 := tp[0], tp[1], tp[2]
 	peerManager := New(ctx, peerQueueFactory, self)
-	cids := testutil.GenerateCids(4)
+	cids := testutil.GenerateWants(4)
 
 	// Connect to peer1 and peer2
 	peerManager.Connected(peer1)
 	peerManager.Connected(peer2)
 
 	// Send 2 want-blocks and 1 want-have to peer1
-	peerManager.SendWants(ctx, peer1, []cid.Cid{cids[0], cids[1]}, []cid.Cid{cids[2]})
+	peerManager.SendWants(ctx, peer1, []auth.Want{cids[0], cids[1]}, []auth.Want{cids[2]})
 
 	// Clear messages
 	collectMessages(msgs, 2*time.Millisecond)
 
 	// Send cancels for 1 want-block and 1 want-have
-	peerManager.SendCancels(ctx, []cid.Cid{cids[0], cids[2]})
+	peerManager.SendCancels(ctx, []auth.Want{cids[0], cids[2]})
 	collected := collectMessages(msgs, 2*time.Millisecond)
 
 	if _, ok := collected[peer2]; ok {
@@ -326,10 +326,10 @@ type benchPeerQueue struct {
 func (*benchPeerQueue) Startup()  {}
 func (*benchPeerQueue) Shutdown() {}
 
-func (*benchPeerQueue) AddBroadcastWantHaves(whs []cid.Cid)   {}
-func (*benchPeerQueue) AddWants(wbs []cid.Cid, whs []cid.Cid) {}
-func (*benchPeerQueue) AddCancels(cs []cid.Cid)               {}
-func (*benchPeerQueue) ResponseReceived(ks []cid.Cid)         {}
+func (*benchPeerQueue) AddBroadcastWantHaves(whs []auth.Want)     {}
+func (*benchPeerQueue) AddWants(wbs []auth.Want, whs []auth.Want) {}
+func (*benchPeerQueue) AddCancels(cs []auth.Want)                 {}
+func (*benchPeerQueue) ResponseReceived(ks []auth.Want)           {}
 
 // Simplistic benchmark to allow us to stress test
 func BenchmarkPeerManager(b *testing.B) {
@@ -352,7 +352,7 @@ func BenchmarkPeerManager(b *testing.B) {
 		connected++
 	}
 
-	var wanted []cid.Cid
+	var wanted []auth.Want
 
 	b.StartTimer()
 	for n := 0; n < b.N; n++ {
@@ -362,11 +362,11 @@ func BenchmarkPeerManager(b *testing.B) {
 		// Alternately add either a few wants or many broadcast wants
 		r := rand.Intn(8)
 		if r == 0 {
-			wants := testutil.GenerateCids(10)
+			wants := testutil.GenerateWants(10)
 			peerManager.SendWants(ctx, peers[i], wants[:2], wants[2:])
 			wanted = append(wanted, wants...)
 		} else if r == 1 {
-			wants := testutil.GenerateCids(30)
+			wants := testutil.GenerateWants(30)
 			peerManager.BroadcastWantHaves(ctx, wants)
 			wanted = append(wanted, wants...)
 		} else {

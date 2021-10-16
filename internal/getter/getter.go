@@ -4,25 +4,24 @@ import (
 	"context"
 	"errors"
 
-	notifications "github.com/ipfs/go-bitswap/internal/notifications"
-	logging "github.com/ipfs/go-log"
-
-	blocks "github.com/ipfs/go-block-format"
 	cid "github.com/ipfs/go-cid"
 	blockstore "github.com/ipfs/go-ipfs-blockstore"
+	logging "github.com/ipfs/go-log"
+	"github.com/peergos/go-bitswap-auth/auth"
+	notifications "github.com/peergos/go-bitswap-auth/internal/notifications"
 )
 
 var log = logging.Logger("bitswap")
 
 // GetBlocksFunc is any function that can take an array of CIDs and return a
 // channel of incoming blocks.
-type GetBlocksFunc func(context.Context, []cid.Cid) (<-chan blocks.Block, error)
+type GetBlocksFunc func(context.Context, []auth.Want) (<-chan auth.AuthBlock, error)
 
 // SyncGetBlock takes a block cid and an async function for getting several
 // blocks that returns a channel, and uses that function to return the
 // block syncronously.
-func SyncGetBlock(p context.Context, k cid.Cid, gb GetBlocksFunc) (blocks.Block, error) {
-	if !k.Defined() {
+func SyncGetBlock(p context.Context, w auth.Want, gb GetBlocksFunc) (auth.AuthBlock, error) {
+	if !w.Cid.Defined() {
 		log.Error("undefined cid in GetBlock")
 		return nil, blockstore.ErrNotFound
 	}
@@ -36,7 +35,7 @@ func SyncGetBlock(p context.Context, k cid.Cid, gb GetBlocksFunc) (blocks.Block,
 	ctx, cancel := context.WithCancel(p)
 	defer cancel()
 
-	promise, err := gb(ctx, []cid.Cid{k})
+	promise, err := gb(ctx, []auth.Want{w})
 	if err != nil {
 		return nil, err
 	}
@@ -58,33 +57,37 @@ func SyncGetBlock(p context.Context, k cid.Cid, gb GetBlocksFunc) (blocks.Block,
 }
 
 // WantFunc is any function that can express a want for set of blocks.
-type WantFunc func(context.Context, []cid.Cid)
+type WantFunc func(context.Context, []auth.Want)
 
 // AsyncGetBlocks take a set of block cids, a pubsub channel for incoming
 // blocks, a want function, and a close function, and returns a channel of
 // incoming blocks.
-func AsyncGetBlocks(ctx context.Context, sessctx context.Context, keys []cid.Cid, notif notifications.PubSub,
-	want WantFunc, cwants func([]cid.Cid)) (<-chan blocks.Block, error) {
+func AsyncGetBlocks(ctx context.Context, sessctx context.Context, wants []auth.Want, notif notifications.PubSub,
+	want WantFunc, cwants func([]cid.Cid)) (<-chan auth.AuthBlock, error) {
 
 	// If there are no keys supplied, just return a closed channel
-	if len(keys) == 0 {
-		out := make(chan blocks.Block)
+	if len(wants) == 0 {
+		out := make(chan auth.AuthBlock)
 		close(out)
 		return out, nil
 	}
 
 	// Use a PubSub notifier to listen for incoming blocks for each key
 	remaining := cid.NewSet()
-	promise := notif.Subscribe(ctx, keys...)
-	for _, k := range keys {
-		log.Debugw("Bitswap.GetBlockRequest.Start", "cid", k)
-		remaining.Add(k)
+	cids := make([]cid.Cid, len(wants))
+	for i, w := range wants {
+		cids[i] = w.Cid
+	}
+	promise := notif.Subscribe(ctx, cids...)
+	for _, w := range wants {
+		log.Debugw("Bitswap.GetBlockRequest.Start", "cid", w.Cid)
+		remaining.Add(w.Cid)
 	}
 
 	// Send the want request for the keys to the network
-	want(ctx, keys)
+	want(ctx, wants)
 
-	out := make(chan blocks.Block)
+	out := make(chan auth.AuthBlock)
 	go handleIncoming(ctx, sessctx, remaining, promise, out, cwants)
 	return out, nil
 }
@@ -93,7 +96,7 @@ func AsyncGetBlocks(ctx context.Context, sessctx context.Context, keys []cid.Cid
 // If the context is cancelled or the incoming channel closes, calls cfun with
 // any keys corresponding to blocks that were never received.
 func handleIncoming(ctx context.Context, sessctx context.Context, remaining *cid.Set,
-	in <-chan blocks.Block, out chan blocks.Block, cfun func([]cid.Cid)) {
+	in <-chan auth.AuthBlock, out chan auth.AuthBlock, cfun func([]cid.Cid)) {
 
 	ctx, cancel := context.WithCancel(ctx)
 

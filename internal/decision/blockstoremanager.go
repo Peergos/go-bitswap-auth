@@ -6,15 +6,16 @@ import (
 	"sync"
 
 	blocks "github.com/ipfs/go-block-format"
-	cid "github.com/ipfs/go-cid"
 	bstore "github.com/ipfs/go-ipfs-blockstore"
 	"github.com/ipfs/go-metrics-interface"
 	process "github.com/jbenet/goprocess"
+	peer "github.com/libp2p/go-libp2p-core/peer"
+	"github.com/peergos/go-bitswap-auth/auth"
 )
 
 // blockstoreManager maintains a pool of workers that make requests to the blockstore.
 type blockstoreManager struct {
-	bs           bstore.Blockstore
+	bs           auth.AuthBlockstore
 	workerCount  int
 	jobs         chan func()
 	px           process.Process
@@ -26,7 +27,7 @@ type blockstoreManager struct {
 // and number of workers
 func newBlockstoreManager(
 	ctx context.Context,
-	bs bstore.Blockstore,
+	bs auth.AuthBlockstore,
 	workerCount int,
 	pendingGauge metrics.Gauge,
 	activeGauge metrics.Gauge,
@@ -77,58 +78,58 @@ func (bsm *blockstoreManager) addJob(ctx context.Context, job func()) error {
 	}
 }
 
-func (bsm *blockstoreManager) getBlockSizes(ctx context.Context, ks []cid.Cid) (map[cid.Cid]int, error) {
-	res := make(map[cid.Cid]int)
-	if len(ks) == 0 {
+func (bsm *blockstoreManager) getBlockSizes(ctx context.Context, ws []auth.Want, remote peer.ID) (map[auth.Want]int, error) {
+	res := make(map[auth.Want]int)
+	if len(ws) == 0 {
 		return res, nil
 	}
 
 	var lk sync.Mutex
-	return res, bsm.jobPerKey(ctx, ks, func(c cid.Cid) {
-		size, err := bsm.bs.GetSize(c)
+	return res, bsm.jobPerKey(ctx, ws, remote, func(w auth.Want, remote peer.ID) {
+		size, err := bsm.bs.GetSize(w.Cid)
 		if err != nil {
-			if err != bstore.ErrNotFound {
+			if err != bstore.ErrNotFound && err != auth.ErrUnauthorised {
 				// Note: this isn't a fatal error. We shouldn't abort the request
-				log.Errorf("blockstore.GetSize(%s) error: %s", c, err)
+				log.Errorf("blockstore.GetSize(%s) error: %s", w.Cid, err)
 			}
 		} else {
 			lk.Lock()
-			res[c] = size
+			res[w] = size
 			lk.Unlock()
 		}
 	})
 }
 
-func (bsm *blockstoreManager) getBlocks(ctx context.Context, ks []cid.Cid) (map[cid.Cid]blocks.Block, error) {
-	res := make(map[cid.Cid]blocks.Block)
-	if len(ks) == 0 {
+func (bsm *blockstoreManager) getBlocks(ctx context.Context, ws []auth.Want, remote peer.ID) (map[auth.Want]blocks.Block, error) {
+	res := make(map[auth.Want]blocks.Block)
+	if len(ws) == 0 {
 		return res, nil
 	}
 
 	var lk sync.Mutex
-	return res, bsm.jobPerKey(ctx, ks, func(c cid.Cid) {
-		blk, err := bsm.bs.Get(c)
+	return res, bsm.jobPerKey(ctx, ws, remote, func(w auth.Want, remote peer.ID) {
+		blk, err := bsm.bs.Get(w.Cid, remote, w.Auth)
 		if err != nil {
-			if err != bstore.ErrNotFound {
+			if err != bstore.ErrNotFound && err != auth.ErrUnauthorised {
 				// Note: this isn't a fatal error. We shouldn't abort the request
-				log.Errorf("blockstore.Get(%s) error: %s", c, err)
+				log.Errorf("blockstore.Get(%s) error: %s", w.Cid, err)
 			}
 		} else {
 			lk.Lock()
-			res[c] = blk
+			res[w] = blk
 			lk.Unlock()
 		}
 	})
 }
 
-func (bsm *blockstoreManager) jobPerKey(ctx context.Context, ks []cid.Cid, jobFn func(c cid.Cid)) error {
+func (bsm *blockstoreManager) jobPerKey(ctx context.Context, ws []auth.Want, remote peer.ID, jobFn func(want auth.Want, remote peer.ID)) error {
 	var err error
 	wg := sync.WaitGroup{}
-	for _, k := range ks {
-		c := k
+	for _, w := range ws {
+		t := w
 		wg.Add(1)
 		err = bsm.addJob(ctx, func() {
-			jobFn(c)
+			jobFn(t, remote)
 			wg.Done()
 		})
 		if err != nil {

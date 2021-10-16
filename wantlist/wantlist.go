@@ -5,27 +5,26 @@ package wantlist
 import (
 	"sort"
 
-	pb "github.com/ipfs/go-bitswap/message/pb"
-
-	cid "github.com/ipfs/go-cid"
+	"github.com/peergos/go-bitswap-auth/auth"
+	pb "github.com/peergos/go-bitswap-auth/message/pb"
 )
 
 // Wantlist is a raw list of wanted blocks and their priorities
 type Wantlist struct {
-	set map[cid.Cid]Entry
+	set map[auth.Want]Entry
 }
 
 // Entry is an entry in a want list, consisting of a cid and its priority
 type Entry struct {
-	Cid      cid.Cid
+	Want     auth.Want
 	Priority int32
 	WantType pb.Message_Wantlist_WantType
 }
 
 // NewRefEntry creates a new reference tracked wantlist entry.
-func NewRefEntry(c cid.Cid, p int32) Entry {
+func NewRefEntry(c auth.Want, p int32) Entry {
 	return Entry{
-		Cid:      c,
+		Want:     c,
 		Priority: p,
 		WantType: pb.Message_Wantlist_Block,
 	}
@@ -40,7 +39,7 @@ func (es entrySlice) Less(i, j int) bool { return es[i].Priority > es[j].Priorit
 // New generates a new raw Wantlist
 func New() *Wantlist {
 	return &Wantlist{
-		set: make(map[cid.Cid]Entry),
+		set: make(map[auth.Want]Entry),
 	}
 }
 
@@ -50,7 +49,7 @@ func (w *Wantlist) Len() int {
 }
 
 // Add adds an entry in a wantlist from CID & Priority, if not already present.
-func (w *Wantlist) Add(c cid.Cid, priority int32, wantType pb.Message_Wantlist_WantType) bool {
+func (w *Wantlist) Add(c auth.Want, priority int32, wantType pb.Message_Wantlist_WantType) bool {
 	e, ok := w.set[c]
 
 	// Adding want-have should not override want-block
@@ -59,7 +58,7 @@ func (w *Wantlist) Add(c cid.Cid, priority int32, wantType pb.Message_Wantlist_W
 	}
 
 	w.set[c] = Entry{
-		Cid:      c,
+		Want:     c,
 		Priority: priority,
 		WantType: wantType,
 	}
@@ -68,7 +67,7 @@ func (w *Wantlist) Add(c cid.Cid, priority int32, wantType pb.Message_Wantlist_W
 }
 
 // Remove removes the given cid from the wantlist.
-func (w *Wantlist) Remove(c cid.Cid) bool {
+func (w *Wantlist) Remove(c auth.Want) bool {
 	_, ok := w.set[c]
 	if !ok {
 		return false
@@ -80,7 +79,7 @@ func (w *Wantlist) Remove(c cid.Cid) bool {
 
 // Remove removes the given cid from the wantlist, respecting the type:
 // Remove with want-have will not remove an existing want-block.
-func (w *Wantlist) RemoveType(c cid.Cid, wantType pb.Message_Wantlist_WantType) bool {
+func (w *Wantlist) RemoveType(c auth.Want, wantType pb.Message_Wantlist_WantType) bool {
 	e, ok := w.set[c]
 	if !ok {
 		return false
@@ -97,7 +96,7 @@ func (w *Wantlist) RemoveType(c cid.Cid, wantType pb.Message_Wantlist_WantType) 
 
 // Contains returns the entry, if present, for the given CID, plus whether it
 // was present.
-func (w *Wantlist) Contains(c cid.Cid) (Entry, bool) {
+func (w *Wantlist) Contains(c auth.Want) (Entry, bool) {
 	e, ok := w.set[c]
 	return e, ok
 }
@@ -114,7 +113,7 @@ func (w *Wantlist) Entries() []Entry {
 // Absorb all the entries in other into this want list
 func (w *Wantlist) Absorb(other *Wantlist) {
 	for _, e := range other.Entries() {
-		w.Add(e.Cid, e.Priority, e.WantType)
+		w.Add(e.Want, e.Priority, e.WantType)
 	}
 }
 

@@ -11,11 +11,12 @@ import (
 	"time"
 
 	"github.com/benbjohnson/clock"
-	"github.com/ipfs/go-bitswap/internal/defaults"
-	"github.com/ipfs/go-bitswap/internal/testutil"
-	message "github.com/ipfs/go-bitswap/message"
-	pb "github.com/ipfs/go-bitswap/message/pb"
 	"github.com/ipfs/go-metrics-interface"
+	"github.com/peergos/go-bitswap-auth/auth"
+	"github.com/peergos/go-bitswap-auth/internal/defaults"
+	"github.com/peergos/go-bitswap-auth/internal/testutil"
+	message "github.com/peergos/go-bitswap-auth/message"
+	pb "github.com/peergos/go-bitswap-auth/message/pb"
 
 	blocks "github.com/ipfs/go-block-format"
 	ds "github.com/ipfs/go-datastore"
@@ -89,7 +90,7 @@ type engineSet struct {
 	PeerTagger *fakePeerTagger
 	Peer       peer.ID
 	Engine     *Engine
-	Blockstore blockstore.Blockstore
+	Blockstore auth.AuthBlockstore
 }
 
 func newTestEngine(ctx context.Context, idStr string) engineSet {
@@ -99,13 +100,14 @@ func newTestEngine(ctx context.Context, idStr string) engineSet {
 func newTestEngineWithSampling(ctx context.Context, idStr string, peerSampleInterval time.Duration, sampleCh chan struct{}, clock clock.Clock) engineSet {
 	fpt := &fakePeerTagger{}
 	bs := blockstore.NewBlockstore(dssync.MutexWrap(ds.NewMapDatastore()))
+	abs := auth.NewAuthBlockstore(bs, allowAll)
 	e := newEngineForTesting(ctx, bs, 4, defaults.BitswapEngineTaskWorkerCount, defaults.BitswapMaxOutstandingBytesPerPeer, fpt, "localhost", 0, NewTestScoreLedger(peerSampleInterval, sampleCh, clock))
 	e.StartWorkers(ctx, process.WithTeardown(func() error { return nil }))
 	return engineSet{
 		Peer: peer.ID(idStr),
 		//Strategy: New(true),
 		PeerTagger: fpt,
-		Blockstore: bs,
+		Blockstore: abs,
 		Engine:     e,
 	}
 }
@@ -121,7 +123,7 @@ func TestConsistentAccounting(t *testing.T) {
 
 		m := message.New(false)
 		content := []string{"this", "is", "message", "i"}
-		m.AddBlock(blocks.NewBlock([]byte(strings.Join(content, " "))))
+		m.AddBlock(blocks.NewBlock([]byte(strings.Join(content, " "))), "auth")
 
 		sender.Engine.MessageSent(receiver.Peer, m)
 		receiver.Engine.MessageReceived(ctx, sender.Peer, m)
@@ -200,7 +202,7 @@ func newEngineForTesting(
 	testActiveBlocksGauge := metrics.NewCtx(ctx, "active_block_tasks", "Total number of active blockstore tasks").Gauge()
 	return newEngine(
 		ctx,
-		bs,
+		auth.NewAuthBlockstore(bs, allowAll),
 		bstoreWorkerCount,
 		engineTaskWorkerCount,
 		maxOutstandingBytesPerPeer,
@@ -796,7 +798,7 @@ func checkPresence(presences []message.BlockPresence, expPresence []string, pres
 		found := false
 		expected := blocks.NewBlock([]byte(k))
 		for _, p := range presences {
-			if p.Cid.Equals(expected.Cid()) {
+			if p.Want.Cid.Equals(expected.Cid()) {
 				found = true
 				if p.Type != presenceType {
 					return errors.New("type mismatch")
@@ -811,11 +813,11 @@ func checkPresence(presences []message.BlockPresence, expPresence []string, pres
 	return nil
 }
 
-func formatBlocksDiff(blks []blocks.Block, expBlks []string) string {
+func formatBlocksDiff(blks []auth.AuthBlock, expBlks []string) string {
 	var out bytes.Buffer
 	out.WriteString(fmt.Sprintf("Blocks (%d):\n", len(blks)))
 	for _, b := range blks {
-		out.WriteString(fmt.Sprintf("  %s: %s\n", b.Cid(), b.RawData()))
+		out.WriteString(fmt.Sprintf("  %s: %s\n", b.Cid(), b.GetAuthedData()))
 	}
 	out.WriteString(fmt.Sprintf("Expected (%d):\n", len(expBlks)))
 	for _, k := range expBlks {
@@ -833,7 +835,7 @@ func formatPresencesDiff(presences []message.BlockPresence, expHaves []string, e
 		if p.Type == pb.Message_DontHave {
 			t = "DONT_HAVE"
 		}
-		out.WriteString(fmt.Sprintf("  %s - %s\n", p.Cid, t))
+		out.WriteString(fmt.Sprintf("  %s - %s\n", p.Want.Cid, t))
 	}
 	out.WriteString(fmt.Sprintf("Expected (%d):\n", len(expHaves)+len(expDontHaves)))
 	for _, k := range expHaves {
@@ -910,20 +912,21 @@ func TestPartnerWantsThenCancels(t *testing.T) {
 }
 
 func TestSendReceivedBlocksToPeersThatWantThem(t *testing.T) {
-	bs := blockstore.NewBlockstore(dssync.MutexWrap(ds.NewMapDatastore()))
+	rbs := blockstore.NewBlockstore(dssync.MutexWrap(ds.NewMapDatastore()))
+	bs := auth.NewAuthBlockstore(rbs, allowAll)
 	partner := libp2ptest.RandPeerIDFatal(t)
 	otherPeer := libp2ptest.RandPeerIDFatal(t)
 
 	ctx := context.Background()
-	e := newEngineForTesting(ctx, bs, 4, defaults.BitswapEngineTaskWorkerCount, defaults.BitswapMaxOutstandingBytesPerPeer, &fakePeerTagger{}, "localhost", 0, NewTestScoreLedger(shortTerm, nil, clock.New()))
+	e := newEngineForTesting(ctx, rbs, 4, defaults.BitswapEngineTaskWorkerCount, defaults.BitswapMaxOutstandingBytesPerPeer, &fakePeerTagger{}, "localhost", 0, NewTestScoreLedger(shortTerm, nil, clock.New()))
 	e.StartWorkers(ctx, process.WithTeardown(func() error { return nil }))
 
 	blks := testutil.GenerateBlocksOfSize(4, 8*1024)
 	msg := message.New(false)
-	msg.AddEntry(blks[0].Cid(), 4, pb.Message_Wantlist_Have, false)
-	msg.AddEntry(blks[1].Cid(), 3, pb.Message_Wantlist_Have, false)
-	msg.AddEntry(blks[2].Cid(), 2, pb.Message_Wantlist_Block, false)
-	msg.AddEntry(blks[3].Cid(), 1, pb.Message_Wantlist_Block, false)
+	msg.AddEntry(auth.NewWant(blks[0].Cid(), "auth"), 4, pb.Message_Wantlist_Have, false)
+	msg.AddEntry(auth.NewWant(blks[1].Cid(), "auth"), 3, pb.Message_Wantlist_Have, false)
+	msg.AddEntry(auth.NewWant(blks[2].Cid(), "auth"), 2, pb.Message_Wantlist_Block, false)
+	msg.AddEntry(auth.NewWant(blks[3].Cid(), "auth"), 1, pb.Message_Wantlist_Block, false)
 	e.MessageReceived(context.Background(), partner, msg)
 
 	// Nothing in blockstore, so shouldn't get any envelope
@@ -933,10 +936,10 @@ func TestSendReceivedBlocksToPeersThatWantThem(t *testing.T) {
 		t.Fatal("expected no envelope yet")
 	}
 
-	if err := bs.PutMany([]blocks.Block{blks[0], blks[2]}); err != nil {
+	if err := bs.PutMany([]auth.AuthBlock{blks[0], blks[2]}); err != nil {
 		t.Fatal(err)
 	}
-	e.ReceiveFrom(otherPeer, []blocks.Block{blks[0], blks[2]})
+	e.ReceiveFrom(otherPeer, []auth.AuthBlock{blks[0], blks[2]})
 	_, env = getNextEnvelope(e, next, 5*time.Millisecond)
 	if env == nil {
 		t.Fatal("expected envelope")
@@ -949,26 +952,27 @@ func TestSendReceivedBlocksToPeersThatWantThem(t *testing.T) {
 		t.Fatal("expected 1 block")
 	}
 	sentHave := env.Message.BlockPresences()
-	if len(sentHave) != 1 || !sentHave[0].Cid.Equals(blks[0].Cid()) || sentHave[0].Type != pb.Message_Have {
+	if len(sentHave) != 1 || !sentHave[0].Want.Cid.Equals(blks[0].Cid()) || sentHave[0].Type != pb.Message_Have {
 		t.Fatal("expected 1 HAVE")
 	}
 }
 
 func TestSendDontHave(t *testing.T) {
-	bs := blockstore.NewBlockstore(dssync.MutexWrap(ds.NewMapDatastore()))
+	rbs := blockstore.NewBlockstore(dssync.MutexWrap(ds.NewMapDatastore()))
+	bs := auth.NewAuthBlockstore(rbs, allowAll)
 	partner := libp2ptest.RandPeerIDFatal(t)
 	otherPeer := libp2ptest.RandPeerIDFatal(t)
 
 	ctx := context.Background()
-	e := newEngineForTesting(ctx, bs, 4, defaults.BitswapEngineTaskWorkerCount, defaults.BitswapMaxOutstandingBytesPerPeer, &fakePeerTagger{}, "localhost", 0, NewTestScoreLedger(shortTerm, nil, clock.New()))
+	e := newEngineForTesting(ctx, rbs, 4, defaults.BitswapEngineTaskWorkerCount, defaults.BitswapMaxOutstandingBytesPerPeer, &fakePeerTagger{}, "localhost", 0, NewTestScoreLedger(shortTerm, nil, clock.New()))
 	e.StartWorkers(ctx, process.WithTeardown(func() error { return nil }))
 
 	blks := testutil.GenerateBlocksOfSize(4, 8*1024)
 	msg := message.New(false)
-	msg.AddEntry(blks[0].Cid(), 4, pb.Message_Wantlist_Have, false)
-	msg.AddEntry(blks[1].Cid(), 3, pb.Message_Wantlist_Have, true)
-	msg.AddEntry(blks[2].Cid(), 2, pb.Message_Wantlist_Block, false)
-	msg.AddEntry(blks[3].Cid(), 1, pb.Message_Wantlist_Block, true)
+	msg.AddEntry(auth.NewWant(blks[0].Cid(), "auth"), 4, pb.Message_Wantlist_Have, false)
+	msg.AddEntry(auth.NewWant(blks[1].Cid(), "auth"), 3, pb.Message_Wantlist_Have, true)
+	msg.AddEntry(auth.NewWant(blks[2].Cid(), "auth"), 2, pb.Message_Wantlist_Block, false)
+	msg.AddEntry(auth.NewWant(blks[3].Cid(), "auth"), 1, pb.Message_Wantlist_Block, true)
 	e.MessageReceived(context.Background(), partner, msg)
 
 	// Nothing in blockstore, should get DONT_HAVE for entries that wanted it
@@ -987,12 +991,12 @@ func TestSendDontHave(t *testing.T) {
 	if len(sentDontHaves) != 2 {
 		t.Fatal("expected 2 DONT_HAVEs")
 	}
-	if !sentDontHaves[0].Cid.Equals(blks[1].Cid()) &&
-		!sentDontHaves[1].Cid.Equals(blks[1].Cid()) {
+	if !sentDontHaves[0].Want.Cid.Equals(blks[1].Cid()) &&
+		!sentDontHaves[1].Want.Cid.Equals(blks[1].Cid()) {
 		t.Fatal("expected DONT_HAVE for want-have")
 	}
-	if !sentDontHaves[0].Cid.Equals(blks[3].Cid()) &&
-		!sentDontHaves[1].Cid.Equals(blks[3].Cid()) {
+	if !sentDontHaves[0].Want.Cid.Equals(blks[3].Cid()) &&
+		!sentDontHaves[1].Want.Cid.Equals(blks[3].Cid()) {
 		t.Fatal("expected DONT_HAVE for want-block")
 	}
 
@@ -1020,23 +1024,23 @@ func TestSendDontHave(t *testing.T) {
 }
 
 func TestWantlistForPeer(t *testing.T) {
-	bs := blockstore.NewBlockstore(dssync.MutexWrap(ds.NewMapDatastore()))
+	rbs := blockstore.NewBlockstore(dssync.MutexWrap(ds.NewMapDatastore()))
 	partner := libp2ptest.RandPeerIDFatal(t)
 	otherPeer := libp2ptest.RandPeerIDFatal(t)
 
 	ctx := context.Background()
-	e := newEngineForTesting(ctx, bs, 4, defaults.BitswapEngineTaskWorkerCount, defaults.BitswapMaxOutstandingBytesPerPeer, &fakePeerTagger{}, "localhost", 0, NewTestScoreLedger(shortTerm, nil, clock.New()))
+	e := newEngineForTesting(ctx, rbs, 4, defaults.BitswapEngineTaskWorkerCount, defaults.BitswapMaxOutstandingBytesPerPeer, &fakePeerTagger{}, "localhost", 0, NewTestScoreLedger(shortTerm, nil, clock.New()))
 	e.StartWorkers(ctx, process.WithTeardown(func() error { return nil }))
 
 	blks := testutil.GenerateBlocksOfSize(4, 8*1024)
 	msg := message.New(false)
-	msg.AddEntry(blks[0].Cid(), 2, pb.Message_Wantlist_Have, false)
-	msg.AddEntry(blks[1].Cid(), 3, pb.Message_Wantlist_Have, false)
+	msg.AddEntry(auth.NewWant(blks[0].Cid(), "auth"), 2, pb.Message_Wantlist_Have, false)
+	msg.AddEntry(auth.NewWant(blks[1].Cid(), "auth"), 3, pb.Message_Wantlist_Have, false)
 	e.MessageReceived(context.Background(), partner, msg)
 
 	msg2 := message.New(false)
-	msg2.AddEntry(blks[2].Cid(), 1, pb.Message_Wantlist_Block, false)
-	msg2.AddEntry(blks[3].Cid(), 4, pb.Message_Wantlist_Block, false)
+	msg2.AddEntry(auth.NewWant(blks[2].Cid(), "auth"), 1, pb.Message_Wantlist_Block, false)
+	msg2.AddEntry(auth.NewWant(blks[3].Cid(), "auth"), 4, pb.Message_Wantlist_Block, false)
 	e.MessageReceived(context.Background(), partner, msg2)
 
 	entries := e.WantlistForPeer(otherPeer)
@@ -1062,7 +1066,8 @@ func TestTaggingPeers(t *testing.T) {
 
 	keys := []string{"a", "b", "c", "d", "e"}
 	for _, letter := range keys {
-		block := blocks.NewBlock([]byte(letter))
+		raw := blocks.NewBlock([]byte(letter))
+		block := auth.NewBlock(raw, "auth")
 		if err := sanfrancisco.Blockstore.Put(block); err != nil {
 			t.Fatal(err)
 		}
@@ -1096,7 +1101,7 @@ func TestTaggingUseful(t *testing.T) {
 
 	block := blocks.NewBlock([]byte("foobar"))
 	msg := message.New(false)
-	msg.AddBlock(block)
+	msg.AddBlock(block, "auth")
 
 	for i := 0; i < 3; i++ {
 		if untagged := me.PeerTagger.count(me.Engine.tagUseful); untagged != 0 {
@@ -1145,7 +1150,7 @@ func partnerWantBlocks(e *Engine, keys []string, partner peer.ID) {
 	add := message.New(false)
 	for i, letter := range keys {
 		block := blocks.NewBlock([]byte(letter))
-		add.AddEntry(block.Cid(), int32(len(keys)-i), pb.Message_Wantlist_Block, true)
+		add.AddEntry(auth.NewWant(block.Cid(), "auth"), int32(len(keys)-i), pb.Message_Wantlist_Block, true)
 	}
 	e.MessageReceived(context.Background(), partner, add)
 }
@@ -1155,12 +1160,12 @@ func partnerWantBlocksHaves(e *Engine, keys []string, wantHaves []string, sendDo
 	priority := int32(len(wantHaves) + len(keys))
 	for _, letter := range wantHaves {
 		block := blocks.NewBlock([]byte(letter))
-		add.AddEntry(block.Cid(), priority, pb.Message_Wantlist_Have, sendDontHave)
+		add.AddEntry(auth.NewWant(block.Cid(), "auth"), priority, pb.Message_Wantlist_Have, sendDontHave)
 		priority--
 	}
 	for _, letter := range keys {
 		block := blocks.NewBlock([]byte(letter))
-		add.AddEntry(block.Cid(), priority, pb.Message_Wantlist_Block, sendDontHave)
+		add.AddEntry(auth.NewWant(block.Cid(), "auth"), priority, pb.Message_Wantlist_Block, sendDontHave)
 		priority--
 	}
 	e.MessageReceived(context.Background(), partner, add)
@@ -1170,7 +1175,7 @@ func partnerCancels(e *Engine, keys []string, partner peer.ID) {
 	cancels := message.New(false)
 	for _, k := range keys {
 		block := blocks.NewBlock([]byte(k))
-		cancels.Cancel(block.Cid())
+		cancels.Cancel(auth.NewWant(block.Cid(), "auth"))
 	}
 	e.MessageReceived(context.Background(), partner, cancels)
 }

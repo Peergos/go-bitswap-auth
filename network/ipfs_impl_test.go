@@ -7,21 +7,21 @@ import (
 	"testing"
 	"time"
 
-	bsmsg "github.com/ipfs/go-bitswap/message"
-	pb "github.com/ipfs/go-bitswap/message/pb"
-	bsnet "github.com/ipfs/go-bitswap/network"
-	tn "github.com/ipfs/go-bitswap/testnet"
 	ds "github.com/ipfs/go-datastore"
 	blocksutil "github.com/ipfs/go-ipfs-blocksutil"
 	mockrouting "github.com/ipfs/go-ipfs-routing/mock"
-	"github.com/multiformats/go-multistream"
-
 	"github.com/libp2p/go-libp2p-core/host"
 	"github.com/libp2p/go-libp2p-core/network"
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/libp2p/go-libp2p-core/protocol"
 	tnet "github.com/libp2p/go-libp2p-testing/net"
 	mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
+	"github.com/multiformats/go-multistream"
+	"github.com/peergos/go-bitswap-auth/auth"
+	bsmsg "github.com/peergos/go-bitswap-auth/message"
+	pb "github.com/peergos/go-bitswap-auth/message/pb"
+	bsnet "github.com/peergos/go-bitswap-auth/network"
+	tn "github.com/peergos/go-bitswap-auth/testnet"
 )
 
 // Receiver is an interface for receiving messages from the GraphSyncNetwork.
@@ -204,8 +204,8 @@ func TestMessageSendAndReceive(t *testing.T) {
 	block1 := blockGenerator.Next()
 	block2 := blockGenerator.Next()
 	sent := bsmsg.New(false)
-	sent.AddEntry(block1.Cid(), 1, pb.Message_Wantlist_Block, true)
-	sent.AddBlock(block2)
+	sent.AddEntry(auth.NewWant(block1.Cid(), "auth"), 1, pb.Message_Wantlist_Block, true)
+	sent.AddBlock(block2, "auth")
 
 	err = bsnet1.SendMessage(ctx, p2.ID(), sent)
 	if err != nil {
@@ -235,7 +235,7 @@ func TestMessageSendAndReceive(t *testing.T) {
 		t.Fatal("Did not add want to received message")
 	}
 	receivedWant := receivedWants[0]
-	if receivedWant.Cid != sentWant.Cid ||
+	if receivedWant.Want != sentWant.Want ||
 		receivedWant.Priority != sentWant.Priority ||
 		receivedWant.Cancel != sentWant.Cancel {
 		t.Fatal("Sent message wants did not match received message wants")
@@ -308,7 +308,7 @@ func prepareNetwork(t *testing.T, ctx context.Context, p1 tnet.Identity, r1 *rec
 	blockGenerator := blocksutil.NewBlockGenerator()
 	block1 := blockGenerator.Next()
 	msg := bsmsg.New(false)
-	msg.AddEntry(block1.Cid(), 1, pb.Message_Wantlist_Block, true)
+	msg.AddEntry(auth.NewWant(block1.Cid(), "auth"), 1, pb.Message_Wantlist_Block, true)
 
 	return eh1, bsnet1, eh2, bsnet2, msg
 }

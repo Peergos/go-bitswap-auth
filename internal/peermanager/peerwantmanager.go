@@ -4,8 +4,8 @@ import (
 	"bytes"
 	"fmt"
 
-	cid "github.com/ipfs/go-cid"
 	peer "github.com/libp2p/go-libp2p-core/peer"
+	"github.com/peergos/go-bitswap-auth/auth"
 )
 
 // Gauge can be used to keep track of a metric that increases and decreases
@@ -25,10 +25,10 @@ type peerWantManager struct {
 	peerWants map[peer.ID]*peerWant
 
 	// Reverse index of all wants in peerWants.
-	wantPeers map[cid.Cid]map[peer.ID]struct{}
+	wantPeers map[auth.Want]map[peer.ID]struct{}
 
 	// broadcastWants tracks all the current broadcast wants.
-	broadcastWants *cid.Set
+	broadcastWants *auth.Set
 
 	// Keeps track of the number of active want-haves & want-blocks
 	wantGauge Gauge
@@ -37,8 +37,8 @@ type peerWantManager struct {
 }
 
 type peerWant struct {
-	wantBlocks *cid.Set
-	wantHaves  *cid.Set
+	wantBlocks *auth.Set
+	wantHaves  *auth.Set
 	peerQueue  PeerQueue
 }
 
@@ -46,9 +46,9 @@ type peerWant struct {
 // number of active want-blocks (ie sent but no response received)
 func newPeerWantManager(wantGauge Gauge, wantBlockGauge Gauge) *peerWantManager {
 	return &peerWantManager{
-		broadcastWants: cid.NewSet(),
+		broadcastWants: auth.NewSet(),
 		peerWants:      make(map[peer.ID]*peerWant),
-		wantPeers:      make(map[cid.Cid]map[peer.ID]struct{}),
+		wantPeers:      make(map[auth.Want]map[peer.ID]struct{}),
 		wantGauge:      wantGauge,
 		wantBlockGauge: wantBlockGauge,
 	}
@@ -62,8 +62,8 @@ func (pwm *peerWantManager) addPeer(peerQueue PeerQueue, p peer.ID) {
 	}
 
 	pwm.peerWants[p] = &peerWant{
-		wantBlocks: cid.NewSet(),
-		wantHaves:  cid.NewSet(),
+		wantBlocks: auth.NewSet(),
+		wantHaves:  auth.NewSet(),
 		peerQueue:  peerQueue,
 	}
 
@@ -82,12 +82,12 @@ func (pwm *peerWantManager) removePeer(p peer.ID) {
 	}
 
 	// Clean up want-blocks
-	_ = pws.wantBlocks.ForEach(func(c cid.Cid) error {
+	_ = pws.wantBlocks.ForEach(func(w auth.Want) error {
 		// Clean up want-blocks from the reverse index
-		pwm.reverseIndexRemove(c, p)
+		pwm.reverseIndexRemove(w, p)
 
 		// Decrement the gauges by the number of pending want-blocks to the peer
-		peerCounts := pwm.wantPeerCounts(c)
+		peerCounts := pwm.wantPeerCounts(w)
 		if peerCounts.wantBlock == 0 {
 			pwm.wantBlockGauge.Dec()
 		}
@@ -99,12 +99,12 @@ func (pwm *peerWantManager) removePeer(p peer.ID) {
 	})
 
 	// Clean up want-haves
-	_ = pws.wantHaves.ForEach(func(c cid.Cid) error {
+	_ = pws.wantHaves.ForEach(func(w auth.Want) error {
 		// Clean up want-haves from the reverse index
-		pwm.reverseIndexRemove(c, p)
+		pwm.reverseIndexRemove(w, p)
 
 		// Decrement the gauge by the number of pending want-haves to the peer
-		peerCounts := pwm.wantPeerCounts(c)
+		peerCounts := pwm.wantPeerCounts(w)
 		if !peerCounts.wanted() {
 			pwm.wantGauge.Dec()
 		}
@@ -115,18 +115,18 @@ func (pwm *peerWantManager) removePeer(p peer.ID) {
 }
 
 // broadcastWantHaves sends want-haves to any peers that have not yet been sent them.
-func (pwm *peerWantManager) broadcastWantHaves(wantHaves []cid.Cid) {
-	unsent := make([]cid.Cid, 0, len(wantHaves))
-	for _, c := range wantHaves {
-		if pwm.broadcastWants.Has(c) {
+func (pwm *peerWantManager) broadcastWantHaves(wantHaves []auth.Want) {
+	unsent := make([]auth.Want, 0, len(wantHaves))
+	for _, w := range wantHaves {
+		if pwm.broadcastWants.Has(w) {
 			// Already a broadcast want, skip it.
 			continue
 		}
-		pwm.broadcastWants.Add(c)
-		unsent = append(unsent, c)
+		pwm.broadcastWants.Add(w)
+		unsent = append(unsent, w)
 
 		// If no peer has a pending want for the key
-		if _, ok := pwm.wantPeers[c]; !ok {
+		if _, ok := pwm.wantPeers[w]; !ok {
 			// Increment the total wants gauge
 			pwm.wantGauge.Inc()
 		}
@@ -137,15 +137,15 @@ func (pwm *peerWantManager) broadcastWantHaves(wantHaves []cid.Cid) {
 	}
 
 	// Allocate a single buffer to filter broadcast wants for each peer
-	bcstWantsBuffer := make([]cid.Cid, 0, len(unsent))
+	bcstWantsBuffer := make([]auth.Want, 0, len(unsent))
 
 	// Send broadcast wants to each peer
 	for _, pws := range pwm.peerWants {
 		peerUnsent := bcstWantsBuffer[:0]
-		for _, c := range unsent {
+		for _, w := range unsent {
 			// If we've already sent a want to this peer, skip them.
-			if !pws.wantBlocks.Has(c) && !pws.wantHaves.Has(c) {
-				peerUnsent = append(peerUnsent, c)
+			if !pws.wantBlocks.Has(w) && !pws.wantHaves.Has(w) {
+				peerUnsent = append(peerUnsent, w)
 			}
 		}
 
@@ -157,9 +157,9 @@ func (pwm *peerWantManager) broadcastWantHaves(wantHaves []cid.Cid) {
 
 // sendWants only sends the peer the want-blocks and want-haves that have not
 // already been sent to it.
-func (pwm *peerWantManager) sendWants(p peer.ID, wantBlocks []cid.Cid, wantHaves []cid.Cid) {
-	fltWantBlks := make([]cid.Cid, 0, len(wantBlocks))
-	fltWantHvs := make([]cid.Cid, 0, len(wantHaves))
+func (pwm *peerWantManager) sendWants(p peer.ID, wantBlocks []auth.Want, wantHaves []auth.Want) {
+	fltWantBlks := make([]auth.Want, 0, len(wantBlocks))
+	fltWantHvs := make([]auth.Want, 0, len(wantHaves))
 
 	// Get the existing want-blocks and want-haves for the peer
 	pws, ok := pwm.peerWants[p]
@@ -231,14 +231,14 @@ func (pwm *peerWantManager) sendWants(p peer.ID, wantBlocks []cid.Cid, wantHaves
 
 // sendCancels sends a cancel to each peer to which a corresponding want was
 // sent
-func (pwm *peerWantManager) sendCancels(cancelKs []cid.Cid) {
+func (pwm *peerWantManager) sendCancels(cancelKs []auth.Want) {
 	if len(cancelKs) == 0 {
 		return
 	}
 
 	// Record how many peers have a pending want-block and want-have for each
 	// key to be cancelled
-	peerCounts := make(map[cid.Cid]wantPeerCnts, len(cancelKs))
+	peerCounts := make(map[auth.Want]wantPeerCnts, len(cancelKs))
 	for _, c := range cancelKs {
 		peerCounts[c] = pwm.wantPeerCounts(c)
 	}
@@ -246,10 +246,10 @@ func (pwm *peerWantManager) sendCancels(cancelKs []cid.Cid) {
 	// Create a buffer to use for filtering cancels per peer, with the
 	// broadcast wants at the front of the buffer (broadcast wants are sent to
 	// all peers)
-	broadcastCancels := make([]cid.Cid, 0, len(cancelKs))
-	for _, c := range cancelKs {
-		if pwm.broadcastWants.Has(c) {
-			broadcastCancels = append(broadcastCancels, c)
+	broadcastCancels := make([]auth.Want, 0, len(cancelKs))
+	for _, w := range cancelKs {
+		if pwm.broadcastWants.Has(w) {
+			broadcastCancels = append(broadcastCancels, w)
 		}
 	}
 
@@ -354,57 +354,57 @@ func (pwm *wantPeerCnts) wanted() bool {
 
 // wantPeerCounts counts how many peers have a pending want-block and want-have
 // for the given CID
-func (pwm *peerWantManager) wantPeerCounts(c cid.Cid) wantPeerCnts {
+func (pwm *peerWantManager) wantPeerCounts(w auth.Want) wantPeerCnts {
 	blockCount := 0
 	haveCount := 0
-	for p := range pwm.wantPeers[c] {
+	for p := range pwm.wantPeers[w] {
 		pws, ok := pwm.peerWants[p]
 		if !ok {
-			log.Errorf("reverse index has extra peer %s for key %s in peerWantManager", string(p), c)
+			log.Errorf("reverse index has extra peer %s for key %s in peerWantManager", string(p), w)
 			continue
 		}
 
-		if pws.wantBlocks.Has(c) {
+		if pws.wantBlocks.Has(w) {
 			blockCount++
-		} else if pws.wantHaves.Has(c) {
+		} else if pws.wantHaves.Has(w) {
 			haveCount++
 		}
 	}
 
-	return wantPeerCnts{blockCount, haveCount, pwm.broadcastWants.Has(c)}
+	return wantPeerCnts{blockCount, haveCount, pwm.broadcastWants.Has(w)}
 }
 
 // Add the peer to the list of peers that have sent a want with the cid
-func (pwm *peerWantManager) reverseIndexAdd(c cid.Cid, p peer.ID) bool {
-	peers, ok := pwm.wantPeers[c]
+func (pwm *peerWantManager) reverseIndexAdd(w auth.Want, p peer.ID) bool {
+	peers, ok := pwm.wantPeers[w]
 	if !ok {
 		peers = make(map[peer.ID]struct{}, 10)
-		pwm.wantPeers[c] = peers
+		pwm.wantPeers[w] = peers
 	}
 	peers[p] = struct{}{}
 	return !ok
 }
 
 // Remove the peer from the list of peers that have sent a want with the cid
-func (pwm *peerWantManager) reverseIndexRemove(c cid.Cid, p peer.ID) {
-	if peers, ok := pwm.wantPeers[c]; ok {
+func (pwm *peerWantManager) reverseIndexRemove(w auth.Want, p peer.ID) {
+	if peers, ok := pwm.wantPeers[w]; ok {
 		delete(peers, p)
 		if len(peers) == 0 {
-			delete(pwm.wantPeers, c)
+			delete(pwm.wantPeers, w)
 		}
 	}
 }
 
 // GetWantBlocks returns the set of all want-blocks sent to all peers
-func (pwm *peerWantManager) getWantBlocks() []cid.Cid {
-	res := cid.NewSet()
+func (pwm *peerWantManager) getWantBlocks() []auth.Want {
+	res := auth.NewSet()
 
 	// Iterate over all known peers
 	for _, pws := range pwm.peerWants {
 		// Iterate over all want-blocks
-		_ = pws.wantBlocks.ForEach(func(c cid.Cid) error {
-			// Add the CID to the results
-			res.Add(c)
+		_ = pws.wantBlocks.ForEach(func(w auth.Want) error {
+			// Add the want to the results
+			res.Add(w)
 			return nil
 		})
 	}
@@ -413,20 +413,20 @@ func (pwm *peerWantManager) getWantBlocks() []cid.Cid {
 }
 
 // GetWantHaves returns the set of all want-haves sent to all peers
-func (pwm *peerWantManager) getWantHaves() []cid.Cid {
-	res := cid.NewSet()
+func (pwm *peerWantManager) getWantHaves() []auth.Want {
+	res := auth.NewSet()
 
 	// Iterate over all peers with active wants.
 	for _, pws := range pwm.peerWants {
 		// Iterate over all want-haves
-		_ = pws.wantHaves.ForEach(func(c cid.Cid) error {
-			// Add the CID to the results
-			res.Add(c)
+		_ = pws.wantHaves.ForEach(func(w auth.Want) error {
+			// Add the want to the results
+			res.Add(w)
 			return nil
 		})
 	}
-	_ = pwm.broadcastWants.ForEach(func(c cid.Cid) error {
-		res.Add(c)
+	_ = pwm.broadcastWants.ForEach(func(w auth.Want) error {
+		res.Add(w)
 		return nil
 	})
 
@@ -434,16 +434,16 @@ func (pwm *peerWantManager) getWantHaves() []cid.Cid {
 }
 
 // GetWants returns the set of all wants (both want-blocks and want-haves).
-func (pwm *peerWantManager) getWants() []cid.Cid {
+func (pwm *peerWantManager) getWants() []auth.Want {
 	res := pwm.broadcastWants.Keys()
 
 	// Iterate over all targeted wants, removing ones that are also in the
 	// broadcast list.
-	for c := range pwm.wantPeers {
-		if pwm.broadcastWants.Has(c) {
+	for w := range pwm.wantPeers {
+		if pwm.broadcastWants.Has(w) {
 			continue
 		}
-		res = append(res, c)
+		res = append(res, w)
 	}
 
 	return res

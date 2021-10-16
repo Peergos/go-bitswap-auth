@@ -5,12 +5,12 @@ import (
 	"fmt"
 	"time"
 
-	engine "github.com/ipfs/go-bitswap/internal/decision"
-	"github.com/ipfs/go-bitswap/internal/defaults"
-	pb "github.com/ipfs/go-bitswap/message/pb"
 	cid "github.com/ipfs/go-cid"
 	process "github.com/jbenet/goprocess"
 	procctx "github.com/jbenet/goprocess/context"
+	engine "github.com/peergos/go-bitswap-auth/internal/decision"
+	"github.com/peergos/go-bitswap-auth/internal/defaults"
+	pb "github.com/peergos/go-bitswap-auth/message/pb"
 	"go.uber.org/zap"
 )
 
@@ -81,7 +81,7 @@ func (bs *Bitswap) logOutgoingBlocks(env *engine.Envelope) {
 	self := bs.network.Self()
 
 	for _, blockPresence := range env.Message.BlockPresences() {
-		c := blockPresence.Cid
+		c := blockPresence.Want.Cid
 		switch blockPresence.Type {
 		case pb.Message_Have:
 			log.Debugw("sent message",
@@ -131,7 +131,7 @@ func (bs *Bitswap) sendBlocks(ctx context.Context, env *engine.Envelope) {
 	dataSent := 0
 	blocks := env.Message.Blocks()
 	for _, b := range blocks {
-		dataSent += len(b.RawData())
+		dataSent += b.Size()
 	}
 	bs.counterLk.Lock()
 	bs.counters.blocksSent += uint64(len(blocks))

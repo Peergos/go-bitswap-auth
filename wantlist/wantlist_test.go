@@ -3,11 +3,12 @@ package wantlist
 import (
 	"testing"
 
-	pb "github.com/ipfs/go-bitswap/message/pb"
 	cid "github.com/ipfs/go-cid"
+	"github.com/peergos/go-bitswap-auth/auth"
+	pb "github.com/peergos/go-bitswap-auth/message/pb"
 )
 
-var testcids []cid.Cid
+var testcids []auth.Want
 
 func init() {
 	strs := []string{
@@ -20,21 +21,21 @@ func init() {
 		if err != nil {
 			panic(err)
 		}
-		testcids = append(testcids, c)
+		testcids = append(testcids, auth.NewWant(c, "auth"))
 	}
 
 }
 
 type wli interface {
-	Contains(cid.Cid) (Entry, bool)
+	Contains(auth.Want) (Entry, bool)
 }
 
-func assertHasCid(t *testing.T, w wli, c cid.Cid) {
+func assertHasCid(t *testing.T, w wli, c auth.Want) {
 	e, ok := w.Contains(c)
 	if !ok {
 		t.Fatal("expected to have ", c)
 	}
-	if !e.Cid.Equals(c) {
+	if !e.Want.Equals(c) {
 		t.Fatal("returned entry had wrong cid value")
 	}
 }
@@ -213,9 +214,9 @@ func TestSortEntries(t *testing.T) {
 	entries := wl.Entries()
 	SortEntries(entries)
 
-	if !entries[0].Cid.Equals(testcids[1]) ||
-		!entries[1].Cid.Equals(testcids[2]) ||
-		!entries[2].Cid.Equals(testcids[0]) {
+	if !entries[0].Want.Equals(testcids[1]) ||
+		!entries[1].Want.Equals(testcids[2]) ||
+		!entries[2].Want.Equals(testcids[0]) {
 		t.Fatal("wrong order")
 	}
 }

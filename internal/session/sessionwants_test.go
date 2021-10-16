@@ -3,8 +3,9 @@ package session
 import (
 	"testing"
 
-	"github.com/ipfs/go-bitswap/internal/testutil"
 	cid "github.com/ipfs/go-cid"
+	"github.com/peergos/go-bitswap-auth/auth"
+	"github.com/peergos/go-bitswap-auth/internal/testutil"
 )
 
 func TestEmptySessionWants(t *testing.T) {
@@ -30,8 +31,8 @@ func TestEmptySessionWants(t *testing.T) {
 
 func TestSessionWants(t *testing.T) {
 	sw := newSessionWants(5)
-	cids := testutil.GenerateCids(10)
-	others := testutil.GenerateCids(1)
+	cids := testutil.GenerateWants(10)
+	others := testutil.GenerateWants(1)
 
 	// Add 10 new wants
 	//  toFetch    Live
@@ -67,7 +68,7 @@ func TestSessionWants(t *testing.T) {
 	// (the other block CID should be ignored)
 	//  toFetch   Live
 	//   98765    432__
-	recvdCids := []cid.Cid{cids[0], cids[1], others[0]}
+	recvdCids := []auth.Want{cids[0], cids[1], others[0]}
 	sw.BlocksReceived(recvdCids)
 	lws = sw.LiveWants()
 	if len(lws) != 3 {
@@ -92,7 +93,7 @@ func TestSessionWants(t *testing.T) {
 	// wants queue.
 	//  toFetch   Live
 	//   987      654_2
-	recvdCids = []cid.Cid{cids[0], cids[3]}
+	recvdCids = []auth.Want{cids[0], cids[3]}
 	sw.BlocksReceived(recvdCids)
 	lws = sw.LiveWants()
 	if len(lws) != 4 {
@@ -102,7 +103,7 @@ func TestSessionWants(t *testing.T) {
 	// One block in the toFetch queue should be cancelled
 	//  toFetch   Live
 	//   9_7      654_2
-	sw.CancelPending([]cid.Cid{cids[8]})
+	sw.CancelPending([]cid.Cid{cids[8].Cid})
 	lws = sw.LiveWants()
 	if len(lws) != 4 {
 		t.Fatal("expected 4 live wants")
@@ -111,7 +112,7 @@ func TestSessionWants(t *testing.T) {
 
 func TestPrepareBroadcast(t *testing.T) {
 	sw := newSessionWants(3)
-	cids := testutil.GenerateCids(10)
+	cids := testutil.GenerateWants(10)
 
 	// Add 6 new wants
 	//  toFetch    Live
@@ -171,7 +172,7 @@ func TestPrepareBroadcast(t *testing.T) {
 // Test that even after GC broadcast returns correct wants
 func TestPrepareBroadcastAfterGC(t *testing.T) {
 	sw := newSessionWants(5)
-	cids := testutil.GenerateCids(liveWantsOrderGCLimit * 2)
+	cids := testutil.GenerateWants(liveWantsOrderGCLimit * 2)
 
 	sw.BlocksRequested(cids)
 

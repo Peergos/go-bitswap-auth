@@ -3,12 +3,12 @@ package session
 import (
 	"testing"
 
-	"github.com/ipfs/go-bitswap/internal/testutil"
+	"github.com/peergos/go-bitswap-auth/internal/testutil"
 )
 
 func TestSendWantBlocksTracker(t *testing.T) {
 	peers := testutil.GeneratePeers(2)
-	cids := testutil.GenerateCids(2)
+	cids := testutil.GenerateWants(2)
 	swbt := newSentWantBlocksTracker()
 
 	if swbt.haveSentWantBlockTo(peers[0], cids[0]) {

@@ -5,22 +5,21 @@ import (
 	"sync"
 	"time"
 
-	cid "github.com/ipfs/go-cid"
 	delay "github.com/ipfs/go-ipfs-delay"
-
-	bsbpm "github.com/ipfs/go-bitswap/internal/blockpresencemanager"
-	notifications "github.com/ipfs/go-bitswap/internal/notifications"
-	bssession "github.com/ipfs/go-bitswap/internal/session"
-	bssim "github.com/ipfs/go-bitswap/internal/sessioninterestmanager"
-	exchange "github.com/ipfs/go-ipfs-exchange-interface"
 	peer "github.com/libp2p/go-libp2p-core/peer"
+	"github.com/peergos/go-bitswap-auth/auth"
+	bsbpm "github.com/peergos/go-bitswap-auth/internal/blockpresencemanager"
+	notifications "github.com/peergos/go-bitswap-auth/internal/notifications"
+	bssession "github.com/peergos/go-bitswap-auth/internal/session"
+	bssim "github.com/peergos/go-bitswap-auth/internal/sessioninterestmanager"
+	exchange "github.com/peergos/go-ipfs-exchange-interface-auth"
 )
 
 // Session is a session that is managed by the session manager
 type Session interface {
 	exchange.Fetcher
 	ID() uint64
-	ReceiveFrom(peer.ID, []cid.Cid, []cid.Cid, []cid.Cid)
+	ReceiveFrom(peer.ID, []auth.Want, []auth.Want, []auth.Want)
 	Shutdown()
 }
 
@@ -145,7 +144,7 @@ func (sm *SessionManager) GetNextSessionID() uint64 {
 }
 
 // ReceiveFrom is called when a new message is received
-func (sm *SessionManager) ReceiveFrom(ctx context.Context, p peer.ID, blks []cid.Cid, haves []cid.Cid, dontHaves []cid.Cid) {
+func (sm *SessionManager) ReceiveFrom(ctx context.Context, p peer.ID, blks []auth.Want, haves []auth.Want, dontHaves []auth.Want) {
 	// Record block presence for HAVE / DONT_HAVE
 	sm.blockPresenceManager.ReceiveFrom(p, haves, dontHaves)
 
@@ -170,14 +169,14 @@ func (sm *SessionManager) ReceiveFrom(ctx context.Context, p peer.ID, blks []cid
 
 // CancelSessionWants is called when a session cancels wants because a call to
 // GetBlocks() is cancelled
-func (sm *SessionManager) CancelSessionWants(sesid uint64, wants []cid.Cid) {
+func (sm *SessionManager) CancelSessionWants(sesid uint64, wants []auth.Want) {
 	// Remove session's interest in the given blocks - returns the keys that no
 	// session is interested in anymore.
 	cancelKs := sm.sessionInterestManager.RemoveSessionInterested(sesid, wants)
 	sm.cancelWants(cancelKs)
 }
 
-func (sm *SessionManager) cancelWants(wants []cid.Cid) {
+func (sm *SessionManager) cancelWants(wants []auth.Want) {
 	// Free up block presence tracking for keys that no session is interested
 	// in anymore
 	sm.blockPresenceManager.RemoveKeys(wants)

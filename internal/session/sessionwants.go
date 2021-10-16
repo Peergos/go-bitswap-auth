@@ -6,6 +6,7 @@ import (
 	"time"
 
 	cid "github.com/ipfs/go-cid"
+	"github.com/peergos/go-bitswap-auth/auth"
 )
 
 // liveWantsOrder and liveWants will get out of sync as blocks are received.
@@ -19,9 +20,9 @@ type sessionWants struct {
 	// The wants that have not yet been sent out
 	toFetch *cidQueue
 	// Wants that have been sent but have not received a response
-	liveWants map[cid.Cid]time.Time
+	liveWants map[auth.Want]time.Time
 	// The order in which wants were requested
-	liveWantsOrder []cid.Cid
+	liveWantsOrder []auth.Want
 	// The maximum number of want-haves to send in a broadcast
 	broadcastLimit int
 }
@@ -29,7 +30,7 @@ type sessionWants struct {
 func newSessionWants(broadcastLimit int) sessionWants {
 	return sessionWants{
 		toFetch:        newCidQueue(),
-		liveWants:      make(map[cid.Cid]time.Time),
+		liveWants:      make(map[auth.Want]time.Time),
 		broadcastLimit: broadcastLimit,
 	}
 }
@@ -39,7 +40,7 @@ func (sw *sessionWants) String() string {
 }
 
 // BlocksRequested is called when the client makes a request for blocks
-func (sw *sessionWants) BlocksRequested(newWants []cid.Cid) {
+func (sw *sessionWants) BlocksRequested(newWants []auth.Want) {
 	for _, k := range newWants {
 		sw.toFetch.Push(k)
 	}
@@ -49,7 +50,7 @@ func (sw *sessionWants) BlocksRequested(newWants []cid.Cid) {
 // the blocks that it wants. It moves as many CIDs from the fetch queue to
 // the live wants queue as possible (given the broadcast limit).
 // Returns the newly live wants.
-func (sw *sessionWants) GetNextWants() []cid.Cid {
+func (sw *sessionWants) GetNextWants() []auth.Want {
 	now := time.Now()
 
 	// Move CIDs from fetch queue to the live wants queue (up to the broadcast
@@ -57,7 +58,7 @@ func (sw *sessionWants) GetNextWants() []cid.Cid {
 	currentLiveCount := len(sw.liveWants)
 	toAdd := sw.broadcastLimit - currentLiveCount
 
-	var live []cid.Cid
+	var live []auth.Want
 	for ; toAdd > 0 && sw.toFetch.Len() > 0; toAdd-- {
 		c := sw.toFetch.Pop()
 		live = append(live, c)
@@ -69,11 +70,11 @@ func (sw *sessionWants) GetNextWants() []cid.Cid {
 }
 
 // WantsSent is called when wants are sent to a peer
-func (sw *sessionWants) WantsSent(ks []cid.Cid) {
+func (sw *sessionWants) WantsSent(ks []auth.Want) {
 	now := time.Now()
 	for _, c := range ks {
-		if _, ok := sw.liveWants[c]; !ok && sw.toFetch.Has(c) {
-			sw.toFetch.Remove(c)
+		if _, ok := sw.liveWants[c]; !ok && sw.toFetch.Has(c.Cid) {
+			sw.toFetch.Remove(c.Cid)
 			sw.liveWantsOrder = append(sw.liveWantsOrder, c)
 			sw.liveWants[c] = now
 		}
@@ -83,8 +84,8 @@ func (sw *sessionWants) WantsSent(ks []cid.Cid) {
 // BlocksReceived removes received block CIDs from the live wants list and
 // measures latency. It returns the CIDs of blocks that were actually
 // wanted (as opposed to duplicates) and the total latency for all incoming blocks.
-func (sw *sessionWants) BlocksReceived(ks []cid.Cid) ([]cid.Cid, time.Duration) {
-	wanted := make([]cid.Cid, 0, len(ks))
+func (sw *sessionWants) BlocksReceived(ks []auth.Want) ([]auth.Want, time.Duration) {
+	wanted := make([]auth.Want, 0, len(ks))
 	totalLatency := time.Duration(0)
 	if len(ks) == 0 {
 		return wanted, totalLatency
@@ -104,7 +105,7 @@ func (sw *sessionWants) BlocksReceived(ks []cid.Cid) ([]cid.Cid, time.Duration) 
 
 			// Remove the CID from the live wants / toFetch queue
 			delete(sw.liveWants, c)
-			sw.toFetch.Remove(c)
+			sw.toFetch.Remove(c.Cid)
 		}
 	}
 
@@ -125,9 +126,9 @@ func (sw *sessionWants) BlocksReceived(ks []cid.Cid) ([]cid.Cid, time.Duration) 
 
 // PrepareBroadcast saves the current time for each live want and returns the
 // live want CIDs up to the broadcast limit.
-func (sw *sessionWants) PrepareBroadcast() []cid.Cid {
+func (sw *sessionWants) PrepareBroadcast() []auth.Want {
 	now := time.Now()
-	live := make([]cid.Cid, 0, len(sw.liveWants))
+	live := make([]auth.Want, 0, len(sw.liveWants))
 	for _, c := range sw.liveWantsOrder {
 		if _, ok := sw.liveWants[c]; ok {
 			// No response was received for the want, so reset the sent time
@@ -152,8 +153,8 @@ func (sw *sessionWants) CancelPending(keys []cid.Cid) {
 }
 
 // LiveWants returns a list of live wants
-func (sw *sessionWants) LiveWants() []cid.Cid {
-	live := make([]cid.Cid, 0, len(sw.liveWants))
+func (sw *sessionWants) LiveWants() []auth.Want {
+	live := make([]auth.Want, 0, len(sw.liveWants))
 	for c := range sw.liveWants {
 		live = append(live, c)
 	}
@@ -162,20 +163,14 @@ func (sw *sessionWants) LiveWants() []cid.Cid {
 }
 
 // RandomLiveWant returns a randomly selected live want
-func (sw *sessionWants) RandomLiveWant() cid.Cid {
-	if len(sw.liveWants) == 0 {
-		return cid.Cid{}
+func (sw *sessionWants) RandomLiveWant() auth.Want {
+	if len(sw.liveWantsOrder) == 0 {
+		return auth.Want{}
 	}
 
 	// picking a random live want
-	i := rand.Intn(len(sw.liveWants))
-	for k := range sw.liveWants {
-		if i == 0 {
-			return k
-		}
-		i--
-	}
-	return cid.Cid{}
+	i := rand.Intn(len(sw.liveWantsOrder))
+	return sw.liveWantsOrder[i]
 }
 
 // Has live wants indicates if there are any live wants
@@ -184,10 +179,10 @@ func (sw *sessionWants) HasLiveWants() bool {
 }
 
 // Indicates whether the want is in either of the fetch or live queues
-func (sw *sessionWants) isWanted(c cid.Cid) bool {
-	_, ok := sw.liveWants[c]
+func (sw *sessionWants) isWanted(w auth.Want) bool {
+	_, ok := sw.liveWants[w]
 	if !ok {
-		ok = sw.toFetch.Has(c)
+		ok = sw.toFetch.Has(w.Cid)
 	}
 	return ok
 }

@@ -13,23 +13,25 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ipfs/go-bitswap/internal/testutil"
 	blocks "github.com/ipfs/go-block-format"
 	protocol "github.com/libp2p/go-libp2p-core/protocol"
+	"github.com/peergos/go-bitswap-auth/internal/testutil"
 
-	bitswap "github.com/ipfs/go-bitswap"
-	bssession "github.com/ipfs/go-bitswap/internal/session"
-	bsnet "github.com/ipfs/go-bitswap/network"
-	testinstance "github.com/ipfs/go-bitswap/testinstance"
-	tn "github.com/ipfs/go-bitswap/testnet"
 	cid "github.com/ipfs/go-cid"
 	delay "github.com/ipfs/go-ipfs-delay"
 	mockrouting "github.com/ipfs/go-ipfs-routing/mock"
+	peer "github.com/libp2p/go-libp2p-core/peer"
+	bitswap "github.com/peergos/go-bitswap-auth"
+	"github.com/peergos/go-bitswap-auth/auth"
+	bssession "github.com/peergos/go-bitswap-auth/internal/session"
+	bsnet "github.com/peergos/go-bitswap-auth/network"
+	testinstance "github.com/peergos/go-bitswap-auth/testinstance"
+	tn "github.com/peergos/go-bitswap-auth/testnet"
 )
 
 type fetchFunc func(b *testing.B, bs *bitswap.Bitswap, ks []cid.Cid)
 
-type distFunc func(b *testing.B, provs []testinstance.Instance, blocks []blocks.Block)
+type distFunc func(b *testing.B, provs []testinstance.Instance, blocks []auth.AuthBlock)
 
 type runStats struct {
 	DupsRcvd uint64
@@ -151,10 +153,15 @@ func BenchmarkFetchFromOldBitswap(b *testing.B) {
 			oldProtocol := []protocol.ID{bsnet.ProtocolBitswapOneOne}
 			oldNetOpts := []bsnet.NetOpt{bsnet.SupportedProtocols(oldProtocol)}
 			oldBsOpts := []bitswap.Option{bitswap.SetSendDontHaves(false)}
-			oldNodeGenerator := testinstance.NewTestInstanceGenerator(net, oldNetOpts, oldBsOpts)
+			allow := func(i int) func(cid.Cid, []byte, peer.ID, string) bool {
+				return func(c cid.Cid, b []byte, p peer.ID, a string) bool {
+					return true
+				}
+			}
+			oldNodeGenerator := testinstance.NewTestInstanceGenerator(net, oldNetOpts, oldBsOpts, allow)
 
 			// Regular new Bitswap node
-			newNodeGenerator := testinstance.NewTestInstanceGenerator(net, nil, nil)
+			newNodeGenerator := testinstance.NewTestInstanceGenerator(net, nil, nil, allow)
 			var instances []testinstance.Instance
 
 			// Create new nodes (fetchers + seeds)
@@ -296,7 +303,12 @@ func BenchmarkDatacenterMultiLeechMultiSeed(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			net := tn.RateLimitedVirtualNetwork(mockrouting.NewServer(), d, rateLimitGenerator)
 
-			ig := testinstance.NewTestInstanceGenerator(net, nil, nil)
+			allow := func(i int) func(cid.Cid, []byte, peer.ID, string) bool {
+				return func(c cid.Cid, b []byte, p peer.ID, a string) bool {
+					return true
+				}
+			}
+			ig := testinstance.NewTestInstanceGenerator(net, nil, nil, allow)
 			defer ig.Close()
 
 			instances := ig.Instances(numnodes)
@@ -314,7 +326,13 @@ func subtestDistributeAndFetch(b *testing.B, numnodes, numblks int, d delay.D, b
 	for i := 0; i < b.N; i++ {
 		net := tn.VirtualNetwork(mockrouting.NewServer(), d)
 
-		ig := testinstance.NewTestInstanceGenerator(net, nil, nil)
+		allow := func(i int) func(cid.Cid, []byte, peer.ID, string) bool {
+			return func(c cid.Cid, b []byte, p peer.ID, a string) bool {
+				return true
+			}
+		}
+
+		ig := testinstance.NewTestInstanceGenerator(net, nil, nil, allow)
 
 		instances := ig.Instances(numnodes)
 		rootBlock := testutil.GenerateBlocksOfSize(1, rootBlockSize)
@@ -329,7 +347,12 @@ func subtestDistributeAndFetchRateLimited(b *testing.B, numnodes, numblks int, d
 	for i := 0; i < b.N; i++ {
 		net := tn.RateLimitedVirtualNetwork(mockrouting.NewServer(), d, rateLimitGenerator)
 
-		ig := testinstance.NewTestInstanceGenerator(net, nil, nil)
+		allow := func(i int) func(cid.Cid, []byte, peer.ID, string) bool {
+			return func(c cid.Cid, b []byte, p peer.ID, a string) bool {
+				return true
+			}
+		}
+		ig := testinstance.NewTestInstanceGenerator(net, nil, nil, allow)
 		defer ig.Close()
 
 		instances := ig.Instances(numnodes)
@@ -340,7 +363,7 @@ func subtestDistributeAndFetchRateLimited(b *testing.B, numnodes, numblks int, d
 	}
 }
 
-func runDistributionMulti(b *testing.B, fetchers []testinstance.Instance, seeds []testinstance.Instance, blocks []blocks.Block, bstoreLatency time.Duration, df distFunc, ff fetchFunc) {
+func runDistributionMulti(b *testing.B, fetchers []testinstance.Instance, seeds []testinstance.Instance, blocks []auth.AuthBlock, bstoreLatency time.Duration, df distFunc, ff fetchFunc) {
 	// Distribute blocks to seed nodes
 	df(b, seeds, blocks)
 
@@ -392,7 +415,7 @@ func runDistributionMulti(b *testing.B, fetchers []testinstance.Instance, seeds 
 	// b.Logf("send/recv: %d / %d (dups: %d)", nst.MessagesSent, nst.MessagesRecvd, st.DupBlksReceived)
 }
 
-func runDistribution(b *testing.B, instances []testinstance.Instance, blocks []blocks.Block, bstoreLatency time.Duration, df distFunc, ff fetchFunc) {
+func runDistribution(b *testing.B, instances []testinstance.Instance, blocks []auth.AuthBlock, bstoreLatency time.Duration, df distFunc, ff fetchFunc) {
 	numnodes := len(instances)
 	fetcher := instances[numnodes-1]
 
@@ -435,7 +458,16 @@ func runDistribution(b *testing.B, instances []testinstance.Instance, blocks []b
 	// b.Logf("send/recv: %d / %d (dups: %d)", nst.MessagesSent, nst.MessagesRecvd, st.DupBlksReceived)
 }
 
-func allToAll(b *testing.B, provs []testinstance.Instance, blocks []blocks.Block) {
+func wrapBlocks(blocks []blocks.Block) []auth.AuthBlock {
+	wrapped := make([]auth.AuthBlock, len(blocks))
+	for i, b := range blocks {
+		wrapped[i] = auth.NewBlock(b, "auth")
+	}
+	return wrapped
+}
+
+func allToAll(b *testing.B, provs []testinstance.Instance, blocks []auth.AuthBlock) {
+
 	for _, p := range provs {
 		if err := p.Blockstore().PutMany(blocks); err != nil {
 			b.Fatal(err)
@@ -445,7 +477,7 @@ func allToAll(b *testing.B, provs []testinstance.Instance, blocks []blocks.Block
 
 // overlap1 gives the first 75 blocks to the first peer, and the last 75 blocks
 // to the second peer. This means both peers have the middle 50 blocks
-func overlap1(b *testing.B, provs []testinstance.Instance, blks []blocks.Block) {
+func overlap1(b *testing.B, provs []testinstance.Instance, blks []auth.AuthBlock) {
 	if len(provs) != 2 {
 		b.Fatal("overlap1 only works with 2 provs")
 	}
@@ -462,7 +494,7 @@ func overlap1(b *testing.B, provs []testinstance.Instance, blks []blocks.Block) 
 
 // overlap2 gives every even numbered block to the first peer, odd numbered
 // blocks to the second.  it also gives every third block to both peers
-func overlap2(b *testing.B, provs []testinstance.Instance, blks []blocks.Block) {
+func overlap2(b *testing.B, provs []testinstance.Instance, blks []auth.AuthBlock) {
 	if len(provs) != 2 {
 		b.Fatal("overlap2 only works with 2 provs")
 	}
@@ -488,7 +520,7 @@ func overlap2(b *testing.B, provs []testinstance.Instance, blks []blocks.Block) 
 // onePeerPerBlock picks a random peer to hold each block
 // with this layout, we shouldnt actually ever see any duplicate blocks
 // but we're mostly just testing performance of the sync algorithm
-func onePeerPerBlock(b *testing.B, provs []testinstance.Instance, blks []blocks.Block) {
+func onePeerPerBlock(b *testing.B, provs []testinstance.Instance, blks []auth.AuthBlock) {
 	for _, blk := range blks {
 		err := provs[rand.Intn(len(provs))].Blockstore().Put(blk)
 		if err != nil {
@@ -500,7 +532,7 @@ func onePeerPerBlock(b *testing.B, provs []testinstance.Instance, blks []blocks.
 func oneAtATime(b *testing.B, bs *bitswap.Bitswap, ks []cid.Cid) {
 	ses := bs.NewSession(context.Background()).(*bssession.Session)
 	for _, c := range ks {
-		_, err := ses.GetBlock(context.Background(), c)
+		_, err := ses.GetBlock(context.Background(), auth.NewWant(c, "auth"))
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -508,11 +540,19 @@ func oneAtATime(b *testing.B, bs *bitswap.Bitswap, ks []cid.Cid) {
 	// b.Logf("Session fetch latency: %s", ses.GetAverageLatency())
 }
 
+func authArray(ks []cid.Cid) []auth.Want {
+	res := make([]auth.Want, len(ks))
+	for i, k := range ks {
+		res[i] = auth.NewWant(k, "auth")
+	}
+	return res
+}
+
 // fetch data in batches, 10 at a time
 func batchFetchBy10(b *testing.B, bs *bitswap.Bitswap, ks []cid.Cid) {
 	ses := bs.NewSession(context.Background())
 	for i := 0; i < len(ks); i += 10 {
-		out, err := ses.GetBlocks(context.Background(), ks[i:i+10])
+		out, err := ses.GetBlocks(context.Background(), authArray(ks[i:i+10]))
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -530,7 +570,7 @@ func fetchAllConcurrent(b *testing.B, bs *bitswap.Bitswap, ks []cid.Cid) {
 		wg.Add(1)
 		go func(c cid.Cid) {
 			defer wg.Done()
-			_, err := ses.GetBlock(context.Background(), c)
+			_, err := ses.GetBlock(context.Background(), auth.NewWant(c, "auth"))
 			if err != nil {
 				b.Error(err)
 			}
@@ -541,7 +581,7 @@ func fetchAllConcurrent(b *testing.B, bs *bitswap.Bitswap, ks []cid.Cid) {
 
 func batchFetchAll(b *testing.B, bs *bitswap.Bitswap, ks []cid.Cid) {
 	ses := bs.NewSession(context.Background())
-	out, err := ses.GetBlocks(context.Background(), ks)
+	out, err := ses.GetBlocks(context.Background(), authArray(ks))
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -552,19 +592,19 @@ func batchFetchAll(b *testing.B, bs *bitswap.Bitswap, ks []cid.Cid) {
 // simulates the fetch pattern of trying to sync a unixfs file graph as fast as possible
 func unixfsFileFetch(b *testing.B, bs *bitswap.Bitswap, ks []cid.Cid) {
 	ses := bs.NewSession(context.Background())
-	_, err := ses.GetBlock(context.Background(), ks[0])
+	_, err := ses.GetBlock(context.Background(), auth.NewWant(ks[0], "auth"))
 	if err != nil {
 		b.Fatal(err)
 	}
 
-	out, err := ses.GetBlocks(context.Background(), ks[1:11])
+	out, err := ses.GetBlocks(context.Background(), authArray(ks[1:11]))
 	if err != nil {
 		b.Fatal(err)
 	}
 	for range out {
 	}
 
-	out, err = ses.GetBlocks(context.Background(), ks[11:])
+	out, err = ses.GetBlocks(context.Background(), authArray(ks[11:]))
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -574,19 +614,19 @@ func unixfsFileFetch(b *testing.B, bs *bitswap.Bitswap, ks []cid.Cid) {
 
 func unixfsFileFetchLarge(b *testing.B, bs *bitswap.Bitswap, ks []cid.Cid) {
 	ses := bs.NewSession(context.Background())
-	_, err := ses.GetBlock(context.Background(), ks[0])
+	_, err := ses.GetBlock(context.Background(), auth.NewWant(ks[0], "auth"))
 	if err != nil {
 		b.Fatal(err)
 	}
 
-	out, err := ses.GetBlocks(context.Background(), ks[1:11])
+	out, err := ses.GetBlocks(context.Background(), authArray(ks[1:11]))
 	if err != nil {
 		b.Fatal(err)
 	}
 	for range out {
 	}
 
-	out, err = ses.GetBlocks(context.Background(), ks[11:100])
+	out, err = ses.GetBlocks(context.Background(), authArray(ks[11:100]))
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -613,7 +653,7 @@ func unixfsFileFetchLarge(b *testing.B, bs *bitswap.Bitswap, ks []cid.Cid) {
 			go func(grp []cid.Cid) {
 				defer wg.Done()
 
-				out, err = ses.GetBlocks(context.Background(), grp)
+				out, err = ses.GetBlocks(context.Background(), authArray(grp))
 				if err != nil {
 					anyErr = err
 				}

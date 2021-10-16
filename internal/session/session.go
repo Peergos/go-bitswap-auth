@@ -4,17 +4,17 @@ import (
 	"context"
 	"time"
 
-	bsbpm "github.com/ipfs/go-bitswap/internal/blockpresencemanager"
-	bsgetter "github.com/ipfs/go-bitswap/internal/getter"
-	notifications "github.com/ipfs/go-bitswap/internal/notifications"
-	bspm "github.com/ipfs/go-bitswap/internal/peermanager"
-	bssim "github.com/ipfs/go-bitswap/internal/sessioninterestmanager"
-	blocks "github.com/ipfs/go-block-format"
 	cid "github.com/ipfs/go-cid"
 	delay "github.com/ipfs/go-ipfs-delay"
 	logging "github.com/ipfs/go-log"
 	peer "github.com/libp2p/go-libp2p-core/peer"
 	loggables "github.com/libp2p/go-libp2p-loggables"
+	"github.com/peergos/go-bitswap-auth/auth"
+	bsbpm "github.com/peergos/go-bitswap-auth/internal/blockpresencemanager"
+	bsgetter "github.com/peergos/go-bitswap-auth/internal/getter"
+	notifications "github.com/peergos/go-bitswap-auth/internal/notifications"
+	bspm "github.com/peergos/go-bitswap-auth/internal/peermanager"
+	bssim "github.com/peergos/go-bitswap-auth/internal/sessioninterestmanager"
 	"go.uber.org/zap"
 )
 
@@ -35,12 +35,12 @@ type PeerManager interface {
 	// interested in a peer's connection state
 	UnregisterSession(uint64)
 	// SendWants tells the PeerManager to send wants to the given peer
-	SendWants(ctx context.Context, peerId peer.ID, wantBlocks []cid.Cid, wantHaves []cid.Cid)
+	SendWants(ctx context.Context, peerId peer.ID, wantBlocks []auth.Want, wantHaves []auth.Want)
 	// BroadcastWantHaves sends want-haves to all connected peers (used for
 	// session discovery)
-	BroadcastWantHaves(context.Context, []cid.Cid)
+	BroadcastWantHaves(context.Context, []auth.Want)
 	// SendCancels tells the PeerManager to send cancels to all peers
-	SendCancels(context.Context, []cid.Cid)
+	SendCancels(context.Context, []auth.Want)
 }
 
 // SessionManager manages all the sessions
@@ -48,7 +48,7 @@ type SessionManager interface {
 	// Remove a session (called when the session shuts down)
 	RemoveSession(sesid uint64)
 	// Cancel wants (called when a call to GetBlocks() is cancelled)
-	CancelSessionWants(sid uint64, wants []cid.Cid)
+	CancelSessionWants(sid uint64, wants []auth.Want)
 }
 
 // SessionPeerManager keeps track of peers in the session
@@ -92,8 +92,9 @@ const (
 )
 
 type op struct {
-	op   opType
-	keys []cid.Cid
+	op    opType
+	keys  []cid.Cid
+	wants []auth.Want
 }
 
 // Session holds state for an individual bitswap transfer operation.
@@ -186,7 +187,7 @@ func (s *Session) Shutdown() {
 }
 
 // ReceiveFrom receives incoming blocks from the given peer.
-func (s *Session) ReceiveFrom(from peer.ID, ks []cid.Cid, haves []cid.Cid, dontHaves []cid.Cid) {
+func (s *Session) ReceiveFrom(from peer.ID, ks []auth.Want, haves []auth.Want, dontHaves []auth.Want) {
 	// The SessionManager tells each Session about all keys that it may be
 	// interested in. Here the Session filters the keys to the ones that this
 	// particular Session is interested in.
@@ -205,12 +206,12 @@ func (s *Session) ReceiveFrom(from peer.ID, ks []cid.Cid, haves []cid.Cid, dontH
 
 	// Inform the session that blocks have been received
 	select {
-	case s.incoming <- op{op: opReceive, keys: ks}:
+	case s.incoming <- op{op: opReceive, wants: ks}:
 	case <-s.ctx.Done():
 	}
 }
 
-func (s *Session) logReceiveFrom(from peer.ID, interestedKs []cid.Cid, haves []cid.Cid, dontHaves []cid.Cid) {
+func (s *Session) logReceiveFrom(from peer.ID, interestedKs []auth.Want, haves []auth.Want, dontHaves []auth.Want) {
 	// Save some CPU cycles if log level is higher than debug
 	if ce := sflog.Check(zap.DebugLevel, "Bitswap <- rcv message"); ce == nil {
 		return
@@ -228,20 +229,19 @@ func (s *Session) logReceiveFrom(from peer.ID, interestedKs []cid.Cid, haves []c
 }
 
 // GetBlock fetches a single block.
-func (s *Session) GetBlock(parent context.Context, k cid.Cid) (blocks.Block, error) {
-	return bsgetter.SyncGetBlock(parent, k, s.GetBlocks)
+func (s *Session) GetBlock(parent context.Context, w auth.Want) (auth.AuthBlock, error) {
+	return bsgetter.SyncGetBlock(parent, w, s.GetBlocks)
 }
 
 // GetBlocks fetches a set of blocks within the context of this session and
 // returns a channel that found blocks will be returned on. No order is
 // guaranteed on the returned blocks.
-func (s *Session) GetBlocks(ctx context.Context, keys []cid.Cid) (<-chan blocks.Block, error) {
+func (s *Session) GetBlocks(ctx context.Context, wants []auth.Want) (<-chan auth.AuthBlock, error) {
 	ctx = logging.ContextWithLoggable(ctx, s.uuid)
-
-	return bsgetter.AsyncGetBlocks(ctx, s.ctx, keys, s.notif,
-		func(ctx context.Context, keys []cid.Cid) {
+	return bsgetter.AsyncGetBlocks(ctx, s.ctx, wants, s.notif,
+		func(ctx context.Context, wants []auth.Want) {
 			select {
-			case s.incoming <- op{op: opWant, keys: keys}:
+			case s.incoming <- op{op: opWant, wants: wants}:
 			case <-ctx.Done():
 			case <-s.ctx.Done():
 			}
@@ -264,15 +264,15 @@ func (s *Session) SetBaseTickDelay(baseTickDelay time.Duration) {
 }
 
 // onWantsSent is called when wants are sent to a peer by the session wants sender
-func (s *Session) onWantsSent(p peer.ID, wantBlocks []cid.Cid, wantHaves []cid.Cid) {
+func (s *Session) onWantsSent(p peer.ID, wantBlocks []auth.Want, wantHaves []auth.Want) {
 	allBlks := append(wantBlocks[:len(wantBlocks):len(wantBlocks)], wantHaves...)
-	s.nonBlockingEnqueue(op{op: opWantsSent, keys: allBlks})
+	s.nonBlockingEnqueue(op{op: opWantsSent, wants: allBlks})
 }
 
 // onPeersExhausted is called when all available peers have sent DONT_HAVE for
 // a set of cids (or all peers become unavailable)
-func (s *Session) onPeersExhausted(ks []cid.Cid) {
-	s.nonBlockingEnqueue(op{op: opBroadcast, keys: ks})
+func (s *Session) onPeersExhausted(ks []auth.Want) {
+	s.nonBlockingEnqueue(op{op: opBroadcast, wants: ks})
 }
 
 // We don't want to block the sessionWantSender if the incoming channel
@@ -304,20 +304,20 @@ func (s *Session) run(ctx context.Context) {
 			switch oper.op {
 			case opReceive:
 				// Received blocks
-				s.handleReceive(oper.keys)
+				s.handleReceive(oper.wants)
 			case opWant:
 				// Client wants blocks
-				s.wantBlocks(ctx, oper.keys)
+				s.wantBlocks(ctx, oper.wants)
 			case opCancel:
 				// Wants were cancelled
 				s.sw.CancelPending(oper.keys)
-				s.sws.Cancel(oper.keys)
+				s.sws.Cancel(oper.wants)
 			case opWantsSent:
 				// Wants were sent to a peer
-				s.sw.WantsSent(oper.keys)
+				s.sw.WantsSent(oper.wants)
 			case opBroadcast:
 				// Broadcast want-haves to all peers
-				s.broadcast(ctx, oper.keys)
+				s.broadcast(ctx, oper.wants)
 			default:
 				panic("unhandled operation")
 			}
@@ -341,7 +341,7 @@ func (s *Session) run(ctx context.Context) {
 // Called when the session hasn't received any blocks for some time, or when
 // all peers in the session have sent DONT_HAVE for a particular set of CIDs.
 // Send want-haves to all connected peers, and search for new peers with the CID.
-func (s *Session) broadcast(ctx context.Context, wants []cid.Cid) {
+func (s *Session) broadcast(ctx context.Context, wants []auth.Want) {
 	// If this broadcast is because of an idle timeout (we haven't received
 	// any blocks for a while) then broadcast all pending wants
 	if wants == nil {
@@ -369,10 +369,10 @@ func (s *Session) broadcast(ctx context.Context, wants []cid.Cid) {
 }
 
 // handlePeriodicSearch is called periodically to search for providers of a
-// randomly chosen CID in the sesssion.
+// randomly chosen CID in the session.
 func (s *Session) handlePeriodicSearch(ctx context.Context) {
 	randomWant := s.sw.RandomLiveWant()
-	if !randomWant.Defined() {
+	if !randomWant.Cid.Defined() {
 		return
 	}
 
@@ -380,19 +380,19 @@ func (s *Session) handlePeriodicSearch(ctx context.Context) {
 	// for new providers for blocks.
 	s.findMorePeers(ctx, randomWant)
 
-	s.broadcastWantHaves(ctx, []cid.Cid{randomWant})
+	s.broadcastWantHaves(ctx, []auth.Want{randomWant})
 
 	s.periodicSearchTimer.Reset(s.periodicSearchDelay.NextWaitTime())
 }
 
 // findMorePeers attempts to find more peers for a session by searching for
 // providers for the given Cid
-func (s *Session) findMorePeers(ctx context.Context, c cid.Cid) {
-	go func(k cid.Cid) {
-		for p := range s.providerFinder.FindProvidersAsync(ctx, k) {
+func (s *Session) findMorePeers(ctx context.Context, c auth.Want) {
+	go func(k auth.Want) {
+		for p := range s.providerFinder.FindProvidersAsync(ctx, k.Cid) {
 			// When a provider indicates that it has a cid, it's equivalent to
 			// the providing peer sending a HAVE
-			s.sws.Update(p, nil, []cid.Cid{c}, nil)
+			s.sws.Update(p, nil, []auth.Want{c}, nil)
 		}
 	}(c)
 }
@@ -412,7 +412,7 @@ func (s *Session) handleShutdown() {
 }
 
 // handleReceive is called when the session receives blocks from a peer
-func (s *Session) handleReceive(ks []cid.Cid) {
+func (s *Session) handleReceive(ks []auth.Want) {
 	// Record which blocks have been received and figure out the total latency
 	// for fetching the blocks
 	wanted, totalLatency := s.sw.BlocksReceived(ks)
@@ -437,7 +437,7 @@ func (s *Session) handleReceive(ks []cid.Cid) {
 }
 
 // wantBlocks is called when blocks are requested by the client
-func (s *Session) wantBlocks(ctx context.Context, newks []cid.Cid) {
+func (s *Session) wantBlocks(ctx context.Context, newks []auth.Want) {
 	if len(newks) > 0 {
 		// Inform the SessionInterestManager that this session is interested in the keys
 		s.sim.RecordSessionInterest(s.id, newks)
@@ -454,15 +454,15 @@ func (s *Session) wantBlocks(ctx context.Context, newks []cid.Cid) {
 	}
 
 	// No peers discovered yet, broadcast some want-haves
-	ks := s.sw.GetNextWants()
-	if len(ks) > 0 {
-		log.Infow("No peers - broadcasting", "session", s.id, "want-count", len(ks))
-		s.broadcastWantHaves(ctx, ks)
+	ws := s.sw.GetNextWants()
+	if len(ws) > 0 {
+		log.Infow("No peers - broadcasting", "session", s.id, "want-count", len(ws))
+		s.broadcastWantHaves(ctx, ws)
 	}
 }
 
 // Send want-haves to all connected peers
-func (s *Session) broadcastWantHaves(ctx context.Context, wants []cid.Cid) {
+func (s *Session) broadcastWantHaves(ctx context.Context, wants []auth.Want) {
 	log.Debugw("broadcastWantHaves", "session", s.id, "cids", wants)
 	s.pm.BroadcastWantHaves(ctx, wants)
 }

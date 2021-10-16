@@ -12,30 +12,29 @@ import (
 
 	delay "github.com/ipfs/go-ipfs-delay"
 
-	deciface "github.com/ipfs/go-bitswap/decision"
-	bsbpm "github.com/ipfs/go-bitswap/internal/blockpresencemanager"
-	"github.com/ipfs/go-bitswap/internal/decision"
-	"github.com/ipfs/go-bitswap/internal/defaults"
-	bsgetter "github.com/ipfs/go-bitswap/internal/getter"
-	bsmq "github.com/ipfs/go-bitswap/internal/messagequeue"
-	"github.com/ipfs/go-bitswap/internal/notifications"
-	bspm "github.com/ipfs/go-bitswap/internal/peermanager"
-	bspqm "github.com/ipfs/go-bitswap/internal/providerquerymanager"
-	bssession "github.com/ipfs/go-bitswap/internal/session"
-	bssim "github.com/ipfs/go-bitswap/internal/sessioninterestmanager"
-	bssm "github.com/ipfs/go-bitswap/internal/sessionmanager"
-	bsspm "github.com/ipfs/go-bitswap/internal/sessionpeermanager"
-	bsmsg "github.com/ipfs/go-bitswap/message"
-	bsnet "github.com/ipfs/go-bitswap/network"
-	blocks "github.com/ipfs/go-block-format"
 	"github.com/ipfs/go-cid"
-	blockstore "github.com/ipfs/go-ipfs-blockstore"
-	exchange "github.com/ipfs/go-ipfs-exchange-interface"
 	logging "github.com/ipfs/go-log"
 	"github.com/ipfs/go-metrics-interface"
 	process "github.com/jbenet/goprocess"
 	procctx "github.com/jbenet/goprocess/context"
 	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/peergos/go-bitswap-auth/auth"
+	deciface "github.com/peergos/go-bitswap-auth/decision"
+	bsbpm "github.com/peergos/go-bitswap-auth/internal/blockpresencemanager"
+	"github.com/peergos/go-bitswap-auth/internal/decision"
+	"github.com/peergos/go-bitswap-auth/internal/defaults"
+	bsgetter "github.com/peergos/go-bitswap-auth/internal/getter"
+	bsmq "github.com/peergos/go-bitswap-auth/internal/messagequeue"
+	"github.com/peergos/go-bitswap-auth/internal/notifications"
+	bspm "github.com/peergos/go-bitswap-auth/internal/peermanager"
+	bspqm "github.com/peergos/go-bitswap-auth/internal/providerquerymanager"
+	bssession "github.com/peergos/go-bitswap-auth/internal/session"
+	bssim "github.com/peergos/go-bitswap-auth/internal/sessioninterestmanager"
+	bssm "github.com/peergos/go-bitswap-auth/internal/sessionmanager"
+	bsspm "github.com/peergos/go-bitswap-auth/internal/sessionpeermanager"
+	bsmsg "github.com/peergos/go-bitswap-auth/message"
+	bsnet "github.com/peergos/go-bitswap-auth/network"
+	exchange "github.com/peergos/go-ipfs-exchange-interface-auth"
 )
 
 var log = logging.Logger("bitswap")
@@ -152,7 +151,7 @@ func SetSimulateDontHavesOnTimeout(send bool) Option {
 // BitSwapNetwork. This function registers the returned instance as the network
 // delegate. Runs until context is cancelled or bitswap.Close is called.
 func New(parent context.Context, network bsnet.BitSwapNetwork,
-	bstore blockstore.Blockstore, options ...Option) exchange.Interface {
+	bstore auth.AuthBlockstore, options ...Option) exchange.Interface {
 
 	// important to use provided parent context (since it may include important
 	// loggable data). It's probably not a good idea to allow bitswap to be
@@ -191,7 +190,7 @@ func New(parent context.Context, network bsnet.BitSwapNetwork,
 	// or when no response is received within a timeout.
 	var sm *bssm.SessionManager
 	var bs *Bitswap
-	onDontHaveTimeout := func(p peer.ID, dontHaves []cid.Cid) {
+	onDontHaveTimeout := func(p peer.ID, dontHaves []auth.Want) {
 		// Simulate a message arriving with DONT_HAVEs
 		if bs.simulateDontHavesOnTimeout {
 			sm.ReceiveFrom(ctx, p, nil, nil, dontHaves)
@@ -310,7 +309,7 @@ type Bitswap struct {
 
 	// blockstore is the local database
 	// NB: ensure threadsafety
-	blockstore blockstore.Blockstore
+	blockstore auth.AuthBlockstore
 
 	// manages channels of outgoing blocks for sessions
 	notif notifications.PubSub
@@ -389,16 +388,16 @@ type counters struct {
 
 // GetBlock attempts to retrieve a particular block from peers within the
 // deadline enforced by the context.
-func (bs *Bitswap) GetBlock(parent context.Context, k cid.Cid) (blocks.Block, error) {
-	return bsgetter.SyncGetBlock(parent, k, bs.GetBlocks)
+func (bs *Bitswap) GetBlock(parent context.Context, w auth.Want) (auth.AuthBlock, error) {
+	return bsgetter.SyncGetBlock(parent, w, bs.GetBlocks)
 }
 
 // WantlistForPeer returns the currently understood list of blocks requested by a
 // given peer.
-func (bs *Bitswap) WantlistForPeer(p peer.ID) []cid.Cid {
-	var out []cid.Cid
+func (bs *Bitswap) WantlistForPeer(p peer.ID) []auth.Want {
+	var out []auth.Want
 	for _, e := range bs.engine.WantlistForPeer(p) {
-		out = append(out, e.Cid)
+		out = append(out, e.Want)
 	}
 	return out
 }
@@ -416,22 +415,22 @@ func (bs *Bitswap) LedgerForPeer(p peer.ID) *decision.Receipt {
 // NB: Your request remains open until the context expires. To conserve
 // resources, provide a context with a reasonably short deadline (ie. not one
 // that lasts throughout the lifetime of the server)
-func (bs *Bitswap) GetBlocks(ctx context.Context, keys []cid.Cid) (<-chan blocks.Block, error) {
+func (bs *Bitswap) GetBlocks(ctx context.Context, keys []auth.Want) (<-chan auth.AuthBlock, error) {
 	session := bs.sm.NewSession(ctx, bs.provSearchDelay, bs.rebroadcastDelay)
 	return session.GetBlocks(ctx, keys)
 }
 
 // HasBlock announces the existence of a block to this bitswap service. The
 // service will potentially notify its peers.
-func (bs *Bitswap) HasBlock(blk blocks.Block) error {
-	return bs.receiveBlocksFrom(context.Background(), "", []blocks.Block{blk}, nil, nil)
+func (bs *Bitswap) HasBlock(blk auth.AuthBlock) error {
+	return bs.receiveBlocksFrom(context.Background(), "", []auth.AuthBlock{blk}, nil, nil)
 }
 
 // TODO: Some of this stuff really only needs to be done when adding a block
 // from the user, not when receiving it from the network.
 // In case you run `git blame` on this comment, I'll save you some time: ask
 // @whyrusleeping, I don't know the answers you seek.
-func (bs *Bitswap) receiveBlocksFrom(ctx context.Context, from peer.ID, blks []blocks.Block, haves []cid.Cid, dontHaves []cid.Cid) error {
+func (bs *Bitswap) receiveBlocksFrom(ctx context.Context, from peer.ID, blks []auth.AuthBlock, haves []auth.Want, dontHaves []auth.Want) error {
 	select {
 	case <-bs.process.Closing():
 		return errors.New("bitswap is closed")
@@ -439,10 +438,9 @@ func (bs *Bitswap) receiveBlocksFrom(ctx context.Context, from peer.ID, blks []b
 	}
 
 	wanted := blks
-
 	// If blocks came from the network
 	if from != "" {
-		var notWanted []blocks.Block
+		var notWanted []auth.AuthBlock
 		wanted, notWanted = bs.sim.SplitWantedUnwanted(blks)
 		for _, b := range notWanted {
 			log.Debugf("[recv] block not in wantlist; cid=%s, peer=%s", b.Cid(), from)
@@ -463,16 +461,15 @@ func (bs *Bitswap) receiveBlocksFrom(ctx context.Context, from peer.ID, blks []b
 	// is waiting on a GetBlock for that object, they will receive a reference
 	// to the same node. We should address this soon, but i'm not going to do
 	// it now as it requires more thought and isnt causing immediate problems.
-
-	allKs := make([]cid.Cid, 0, len(blks))
+	allKs := make([]auth.Want, 0, len(blks))
 	for _, b := range blks {
-		allKs = append(allKs, b.Cid())
+		allKs = append(allKs, b.Want())
 	}
 
 	// If the message came from the network
 	if from != "" {
 		// Inform the PeerManager so that we can calculate per-peer latency
-		combined := make([]cid.Cid, 0, len(allKs)+len(haves)+len(dontHaves))
+		combined := make([]auth.Want, 0, len(allKs)+len(haves)+len(dontHaves))
 		combined = append(combined, allKs...)
 		combined = append(combined, haves...)
 		combined = append(combined, dontHaves...)
@@ -552,7 +549,7 @@ func (bs *Bitswap) ReceiveMessage(ctx context.Context, p peer.ID, incoming bsmsg
 	}
 }
 
-func (bs *Bitswap) updateReceiveCounters(blocks []blocks.Block) {
+func (bs *Bitswap) updateReceiveCounters(blocks []auth.AuthBlock) {
 	// Check which blocks are in the datastore
 	// (Note: any errors from the blockstore are simply logged out in
 	// blockstoreHas())
@@ -565,7 +562,7 @@ func (bs *Bitswap) updateReceiveCounters(blocks []blocks.Block) {
 	for i, b := range blocks {
 		has := blocksHas[i]
 
-		blkLen := len(b.RawData())
+		blkLen := b.Size()
 		bs.allMetric.Observe(float64(blkLen))
 		if has {
 			bs.dupMetric.Observe(float64(blkLen))
@@ -582,13 +579,13 @@ func (bs *Bitswap) updateReceiveCounters(blocks []blocks.Block) {
 	}
 }
 
-func (bs *Bitswap) blockstoreHas(blks []blocks.Block) []bool {
+func (bs *Bitswap) blockstoreHas(blks []auth.AuthBlock) []bool {
 	res := make([]bool, len(blks))
 
 	wg := sync.WaitGroup{}
 	for i, block := range blks {
 		wg.Add(1)
-		go func(i int, b blocks.Block) {
+		go func(i int, b auth.AuthBlock) {
 			defer wg.Done()
 
 			has, err := bs.blockstore.Has(b.Cid())
@@ -634,17 +631,17 @@ func (bs *Bitswap) Close() error {
 
 // GetWantlist returns the current local wantlist (both want-blocks and
 // want-haves).
-func (bs *Bitswap) GetWantlist() []cid.Cid {
+func (bs *Bitswap) GetWantlist() []auth.Want {
 	return bs.pm.CurrentWants()
 }
 
 // GetWantBlocks returns the current list of want-blocks.
-func (bs *Bitswap) GetWantBlocks() []cid.Cid {
+func (bs *Bitswap) GetWantBlocks() []auth.Want {
 	return bs.pm.CurrentWantBlocks()
 }
 
 // GetWanthaves returns the current list of want-haves.
-func (bs *Bitswap) GetWantHaves() []cid.Cid {
+func (bs *Bitswap) GetWantHaves() []auth.Want {
 	return bs.pm.CurrentWantHaves()
 }
 

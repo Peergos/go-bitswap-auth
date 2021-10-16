@@ -9,18 +9,16 @@ import (
 
 	"github.com/google/uuid"
 
-	bsmsg "github.com/ipfs/go-bitswap/message"
-	pb "github.com/ipfs/go-bitswap/message/pb"
-	wl "github.com/ipfs/go-bitswap/wantlist"
-	blocks "github.com/ipfs/go-block-format"
-	"github.com/ipfs/go-cid"
-	bstore "github.com/ipfs/go-ipfs-blockstore"
 	logging "github.com/ipfs/go-log"
 	"github.com/ipfs/go-metrics-interface"
 	"github.com/ipfs/go-peertaskqueue"
 	"github.com/ipfs/go-peertaskqueue/peertask"
 	process "github.com/jbenet/goprocess"
 	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/peergos/go-bitswap-auth/auth"
+	bsmsg "github.com/peergos/go-bitswap-auth/message"
+	pb "github.com/peergos/go-bitswap-auth/message/pb"
+	wl "github.com/peergos/go-bitswap-auth/wantlist"
 )
 
 // TODO consider taking responsibility for other types of requests. For
@@ -182,7 +180,7 @@ type Engine struct {
 // work already outstanding.
 func NewEngine(
 	ctx context.Context,
-	bs bstore.Blockstore,
+	bs auth.AuthBlockstore,
 	bstoreWorkerCount,
 	engineTaskWorkerCount, maxOutstandingBytesPerPeer int,
 	peerTagger PeerTagger,
@@ -212,7 +210,7 @@ func NewEngine(
 
 func newEngine(
 	ctx context.Context,
-	bs bstore.Blockstore,
+	bs auth.AuthBlockstore,
 	bstoreWorkerCount,
 	engineTaskWorkerCount, maxOutstandingBytesPerPeer int,
 	peerTagger PeerTagger,
@@ -406,27 +404,27 @@ func (e *Engine) nextEnvelope(ctx context.Context) (*Envelope, error) {
 		msg.SetPendingBytes(int32(pendingBytes))
 
 		// Split out want-blocks, want-haves and DONT_HAVEs
-		blockCids := make([]cid.Cid, 0, len(nextTasks))
-		blockTasks := make(map[cid.Cid]*taskData, len(nextTasks))
+		blockWants := make([]auth.Want, 0, len(nextTasks))
+		blockTasks := make(map[auth.Want]*taskData, len(nextTasks))
 		for _, t := range nextTasks {
-			c := t.Topic.(cid.Cid)
+			w := t.Topic.(auth.Want)
 			td := t.Data.(*taskData)
 			if td.HaveBlock {
 				if td.IsWantBlock {
-					blockCids = append(blockCids, c)
-					blockTasks[c] = td
+					blockWants = append(blockWants, w)
+					blockTasks[w] = td
 				} else {
 					// Add HAVES to the message
-					msg.AddHave(c)
+					msg.AddHave(w)
 				}
 			} else {
 				// Add DONT_HAVEs to the message
-				msg.AddDontHave(c)
+				msg.AddDontHave(w)
 			}
 		}
 
 		// Fetch blocks from datastore
-		blks, err := e.bsm.getBlocks(ctx, blockCids)
+		blks, err := e.bsm.getBlocks(ctx, blockWants, p)
 		if err != nil {
 			// we're dropping the envelope but that's not an issue in practice.
 			return nil, err
@@ -443,7 +441,7 @@ func (e *Engine) nextEnvelope(ctx context.Context) (*Envelope, error) {
 			} else {
 				// Add the block to the message
 				// log.Debugf("  make evlp %s->%s block: %s (%d bytes)", e.self, p, c, len(blk.RawData()))
-				msg.AddBlock(blk)
+				msg.AddBlock(blk, c.Auth)
 			}
 		}
 
@@ -498,9 +496,9 @@ func (e *Engine) MessageReceived(ctx context.Context, p peer.ID, m bsmsg.BitSwap
 		for _, et := range entries {
 			if !et.Cancel {
 				if et.WantType == pb.Message_Wantlist_Have {
-					log.Debugw("Bitswap engine <- want-have", "local", e.self, "from", p, "cid", et.Cid)
+					log.Debugw("Bitswap engine <- want-have", "local", e.self, "from", p, "cid", et.Want.Cid)
 				} else {
-					log.Debugw("Bitswap engine <- want-block", "local", e.self, "from", p, "cid", et.Cid)
+					log.Debugw("Bitswap engine <- want-block", "local", e.self, "from", p, "cid", et.Want.Cid)
 				}
 			}
 		}
@@ -519,11 +517,11 @@ func (e *Engine) MessageReceived(ctx context.Context, p peer.ID, m bsmsg.BitSwap
 
 	// Get block sizes
 	wants, cancels := e.splitWantsCancels(entries)
-	wantKs := cid.NewSet()
+	wantKs := make([]auth.Want, 0, len(wants))
 	for _, entry := range wants {
-		wantKs.Add(entry.Cid)
+		wantKs = append(wantKs, entry.Want)
 	}
-	blockSizes, err := e.bsm.getBlockSizes(ctx, wantKs.Keys())
+	blockSizes, err := e.bsm.getBlockSizes(ctx, wantKs, p)
 	if err != nil {
 		log.Info("aborting message processing", err)
 		return
@@ -531,10 +529,10 @@ func (e *Engine) MessageReceived(ctx context.Context, p peer.ID, m bsmsg.BitSwap
 
 	e.lock.Lock()
 	for _, entry := range wants {
-		e.peerLedger.Wants(p, entry.Cid)
+		e.peerLedger.Wants(p, entry.Want)
 	}
 	for _, entry := range cancels {
-		e.peerLedger.CancelWant(p, entry.Cid)
+		e.peerLedger.CancelWant(p, entry.Want)
 	}
 	e.lock.Unlock()
 
@@ -552,23 +550,23 @@ func (e *Engine) MessageReceived(ctx context.Context, p peer.ID, m bsmsg.BitSwap
 
 	// Remove cancelled blocks from the queue
 	for _, entry := range cancels {
-		log.Debugw("Bitswap engine <- cancel", "local", e.self, "from", p, "cid", entry.Cid)
-		if l.CancelWant(entry.Cid) {
-			e.peerRequestQueue.Remove(entry.Cid, p)
+		log.Debugw("Bitswap engine <- cancel", "local", e.self, "from", p, "cid", entry.Want.Cid)
+		if l.CancelWant(entry.Want) {
+			e.peerRequestQueue.Remove(entry.Want, p)
 		}
 	}
 
 	// For each want-have / want-block
 	for _, entry := range wants {
-		c := entry.Cid
-		blockSize, found := blockSizes[entry.Cid]
+		c := entry.Want
+		blockSize, found := blockSizes[entry.Want]
 
 		// Add each want-have / want-block to the ledger
 		l.Wants(c, entry.Priority, entry.WantType)
 
 		// If the block was not found
 		if !found {
-			log.Debugw("Bitswap engine: block not found", "local", e.self, "from", p, "cid", entry.Cid, "sendDontHave", entry.SendDontHave)
+			log.Debugw("Bitswap engine: block not found", "local", e.self, "from", p, "cid", entry.Want.Cid, "sendDontHave", entry.SendDontHave)
 
 			// Only add the task to the queue if the requester wants a DONT_HAVE
 			if e.sendDontHaves && entry.SendDontHave {
@@ -596,7 +594,7 @@ func (e *Engine) MessageReceived(ctx context.Context, p peer.ID, m bsmsg.BitSwap
 
 			isWantBlock := e.sendAsBlock(entry.WantType, blockSize)
 
-			log.Debugw("Bitswap engine: block found", "local", e.self, "from", p, "cid", entry.Cid, "isWantBlock", isWantBlock)
+			log.Debugw("Bitswap engine: block found", "local", e.self, "from", p, "cid", entry.Want.Cid, "isWantBlock", isWantBlock)
 
 			// entrySize is the amount of space the entry takes up in the
 			// message we send to the recipient. If we're sending a block, the
@@ -646,7 +644,7 @@ func (e *Engine) splitWantsCancels(es []bsmsg.Entry) ([]bsmsg.Entry, []bsmsg.Ent
 // the blocks to them.
 //
 // This function also updates the receive side of the ledger.
-func (e *Engine) ReceiveFrom(from peer.ID, blks []blocks.Block) {
+func (e *Engine) ReceiveFrom(from peer.ID, blks []auth.AuthBlock) {
 	if len(blks) == 0 {
 		return
 	}
@@ -657,55 +655,55 @@ func (e *Engine) ReceiveFrom(from peer.ID, blks []blocks.Block) {
 
 		// Record how many bytes were received in the ledger
 		for _, blk := range blks {
-			log.Debugw("Bitswap engine <- block", "local", e.self, "from", from, "cid", blk.Cid(), "size", len(blk.RawData()))
-			e.scoreLedger.AddToReceivedBytes(l.Partner, len(blk.RawData()))
+			log.Debugw("Bitswap engine <- block", "local", e.self, "from", from, "cid", blk.Cid(), "size", blk.Size())
+			e.scoreLedger.AddToReceivedBytes(l.Partner, blk.Size())
 		}
 
 		l.lk.Unlock()
 	}
 
 	// Get the size of each block
-	blockSizes := make(map[cid.Cid]int, len(blks))
+	blockSizes := make(map[auth.Want]int, len(blks))
 	for _, blk := range blks {
-		blockSizes[blk.Cid()] = len(blk.RawData())
+		blockSizes[blk.Want()] = blk.Size()
 	}
 
 	// Check each peer to see if it wants one of the blocks we received
 	var work bool
-	missingWants := make(map[peer.ID][]cid.Cid)
+	missingWants := make(map[peer.ID][]auth.Want)
 	e.lock.RLock()
 	for _, b := range blks {
-		k := b.Cid()
+		w := b.Want()
 
-		for _, p := range e.peerLedger.Peers(k) {
+		for _, p := range e.peerLedger.Peers(w) {
 			ledger, ok := e.ledgerMap[p]
 			if !ok {
 				// This can happen if the peer has disconnected while we're processing this list.
 				log.Debugw("failed to find peer in ledger", "peer", p)
-				missingWants[p] = append(missingWants[p], k)
+				missingWants[p] = append(missingWants[p], w)
 				continue
 			}
 			ledger.lk.RLock()
-			entry, ok := ledger.WantListContains(k)
+			entry, ok := ledger.WantListContains(w)
 			ledger.lk.RUnlock()
 			if !ok {
 				// This can happen if the peer has canceled their want while we're processing this message.
 				log.Debugw("wantlist index doesn't match peer's wantlist", "peer", p)
-				missingWants[p] = append(missingWants[p], k)
+				missingWants[p] = append(missingWants[p], w)
 				continue
 			}
 			work = true
 
-			blockSize := blockSizes[k]
+			blockSize := blockSizes[w]
 			isWantBlock := e.sendAsBlock(entry.WantType, blockSize)
 
 			entrySize := blockSize
 			if !isWantBlock {
-				entrySize = bsmsg.BlockPresenceSize(k)
+				entrySize = bsmsg.BlockPresenceSize(w)
 			}
 
 			e.peerRequestQueue.PushTasks(p, peertask.Task{
-				Topic:    entry.Cid,
+				Topic:    entry.Want,
 				Priority: int(entry.Priority),
 				Work:     entrySize,
 				Data: &taskData{
@@ -728,16 +726,16 @@ func (e *Engine) ReceiveFrom(from peer.ID, blks []blocks.Block) {
 		for p, wl := range missingWants {
 			if ledger, ok := e.ledgerMap[p]; ok {
 				ledger.lk.RLock()
-				for _, k := range wl {
-					if _, has := ledger.WantListContains(k); has {
+				for _, w := range wl {
+					if _, has := ledger.WantListContains(w); has {
 						continue
 					}
-					e.peerLedger.CancelWant(p, k)
+					e.peerLedger.CancelWant(p, w)
 				}
 				ledger.lk.RUnlock()
 			} else {
-				for _, k := range wl {
-					e.peerLedger.CancelWant(p, k)
+				for _, w := range wl {
+					e.peerLedger.CancelWant(p, w)
 				}
 			}
 		}
@@ -764,15 +762,15 @@ func (e *Engine) MessageSent(p peer.ID, m bsmsg.BitSwapMessage) {
 
 	// Remove sent blocks from the want list for the peer
 	for _, block := range m.Blocks() {
-		e.scoreLedger.AddToSentBytes(l.Partner, len(block.RawData()))
-		l.wantList.RemoveType(block.Cid(), pb.Message_Wantlist_Block)
+		e.scoreLedger.AddToSentBytes(l.Partner, block.Size())
+		l.wantList.RemoveType(block.Want(), pb.Message_Wantlist_Block)
 	}
 
 	// Remove sent block presences from the want list for the peer
 	for _, bp := range m.BlockPresences() {
 		// Don't record sent data. We reserve that for data blocks.
 		if bp.Type == pb.Message_Have {
-			l.wantList.RemoveType(bp.Cid, pb.Message_Wantlist_Have)
+			l.wantList.RemoveType(bp.Want, pb.Message_Wantlist_Have)
 		}
 	}
 }
@@ -803,7 +801,7 @@ func (e *Engine) PeerDisconnected(p peer.ID) {
 		ledger.lk.RUnlock()
 
 		for _, entry := range entries {
-			e.peerLedger.CancelWant(p, entry.Cid)
+			e.peerLedger.CancelWant(p, entry.Want)
 		}
 	}
 	delete(e.ledgerMap, p)

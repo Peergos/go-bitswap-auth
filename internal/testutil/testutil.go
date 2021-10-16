@@ -4,26 +4,28 @@ import (
 	"fmt"
 	"math/rand"
 
-	bsmsg "github.com/ipfs/go-bitswap/message"
-	"github.com/ipfs/go-bitswap/wantlist"
 	blocks "github.com/ipfs/go-block-format"
 	cid "github.com/ipfs/go-cid"
 	blocksutil "github.com/ipfs/go-ipfs-blocksutil"
 	peer "github.com/libp2p/go-libp2p-core/peer"
+	"github.com/peergos/go-bitswap-auth/auth"
+	bsmsg "github.com/peergos/go-bitswap-auth/message"
+	"github.com/peergos/go-bitswap-auth/wantlist"
 )
 
 var blockGenerator = blocksutil.NewBlockGenerator()
 var prioritySeq int32
 
 // GenerateBlocksOfSize generates a series of blocks of the given byte size
-func GenerateBlocksOfSize(n int, size int64) []blocks.Block {
-	generatedBlocks := make([]blocks.Block, 0, n)
+func GenerateBlocksOfSize(n int, size int64) []auth.AuthBlock {
+	generatedBlocks := make([]auth.AuthBlock, 0, n)
 	for i := 0; i < n; i++ {
 		// rand.Read never errors
 		buf := make([]byte, size)
 		rand.Read(buf)
 		b := blocks.NewBlock(buf)
-		generatedBlocks = append(generatedBlocks, b)
+		a := auth.NewBlock(b, "auth")
+		generatedBlocks = append(generatedBlocks, a)
 
 	}
 	return generatedBlocks
@@ -39,13 +41,22 @@ func GenerateCids(n int) []cid.Cid {
 	return cids
 }
 
+func GenerateWants(n int) []auth.Want {
+	cids := make([]auth.Want, 0, n)
+	for i := 0; i < n; i++ {
+		c := blockGenerator.Next().Cid()
+		cids = append(cids, auth.NewWant(c, "auth"))
+	}
+	return cids
+}
+
 // GenerateMessageEntries makes fake bitswap message entries.
 func GenerateMessageEntries(n int, isCancel bool) []bsmsg.Entry {
 	bsmsgs := make([]bsmsg.Entry, 0, n)
 	for i := 0; i < n; i++ {
 		prioritySeq++
 		msg := bsmsg.Entry{
-			Entry:  wantlist.NewRefEntry(blockGenerator.Next().Cid(), prioritySeq),
+			Entry:  wantlist.NewRefEntry(auth.Want{Cid: blockGenerator.Next().Cid(), Auth: "authme"}, prioritySeq),
 			Cancel: isCancel,
 		}
 		bsmsgs = append(bsmsgs, msg)
@@ -94,6 +105,16 @@ func IndexOf(blks []blocks.Block, c cid.Cid) int {
 	return -1
 }
 
+// IndexOf returns the index of a given cid in an array of blocks
+func IndexOfW(blks []auth.AuthBlock, c auth.Want) int {
+	for i, n := range blks {
+		if n.Cid() == c.Cid {
+			return i
+		}
+	}
+	return -1
+}
+
 // ContainsBlock returns true if a block is found n a list of blocks
 func ContainsBlock(blks []blocks.Block, block blocks.Block) bool {
 	return IndexOf(blks, block.Cid()) != -1
@@ -101,6 +122,16 @@ func ContainsBlock(blks []blocks.Block, block blocks.Block) bool {
 
 // ContainsKey returns true if a key is found n a list of CIDs.
 func ContainsKey(ks []cid.Cid, c cid.Cid) bool {
+	for _, k := range ks {
+		if c == k {
+			return true
+		}
+	}
+	return false
+}
+
+// ContainsWant returns true if a key is found n a list of CIDs.
+func ContainsWant(ks []auth.Want, c auth.Want) bool {
 	for _, k := range ks {
 		if c == k {
 			return true
@@ -118,6 +149,21 @@ func MatchKeysIgnoreOrder(ks1 []cid.Cid, ks2 []cid.Cid) bool {
 
 	for _, k := range ks1 {
 		if !ContainsKey(ks2, k) {
+			return false
+		}
+	}
+	return true
+}
+
+// MatchKeysIgnoreOrder returns true if the lists of CIDs match (even if
+// they're in a different order)
+func MatchWantsIgnoreOrder(ks1 []auth.Want, ks2 []auth.Want) bool {
+	if len(ks1) != len(ks2) {
+		return false
+	}
+
+	for _, k := range ks1 {
+		if !ContainsWant(ks2, k) {
 			return false
 		}
 	}
