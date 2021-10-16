@@ -207,6 +207,7 @@ type Message_Wantlist_Entry struct {
 	Cancel       bool                      `protobuf:"varint,3,opt,name=cancel,proto3" json:"cancel,omitempty"`
 	WantType     Message_Wantlist_WantType `protobuf:"varint,4,opt,name=wantType,proto3,enum=bitswap.message.pb.Message_Wantlist_WantType" json:"wantType,omitempty"`
 	SendDontHave bool                      `protobuf:"varint,5,opt,name=sendDontHave,proto3" json:"sendDontHave,omitempty"`
+	Auth         string                    `protobuf:"string,6,opt,name=auth,proto3" json:"auth"`
 }
 
 func (m *Message_Wantlist_Entry) Reset()         { *m = Message_Wantlist_Entry{} }
