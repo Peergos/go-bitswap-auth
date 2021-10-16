@@ -42,7 +42,7 @@ func TestBasicSessions(t *testing.T) {
 	sesa := a.Exchange.NewSession(ctx)
 
 	// Get the block
-	blkout, err := sesa.GetBlock(ctx, block.Cid())
+	blkout, err := sesa.GetBlock(ctx, block.Cid(), "auth")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -93,7 +93,7 @@ func TestSessionBetweenPeers(t *testing.T) {
 
 	// Create a session on Peer B
 	ses := inst[1].Exchange.NewSession(ctx)
-	if _, err := ses.GetBlock(ctx, cids[0]); err != nil {
+	if _, err := ses.GetBlock(ctx, cids[0], "auth"); err != nil {
 		t.Fatal(err)
 	}
 	blks = blks[1:]
@@ -101,7 +101,7 @@ func TestSessionBetweenPeers(t *testing.T) {
 
 	// Fetch blocks with the session, 10 at a time
 	for i := 0; i < 10; i++ {
-		ch, err := ses.GetBlocks(ctx, cids[i*10:(i+1)*10])
+		ch, err := ses.GetBlocks(ctx, cids[i*10:(i+1)*10], authArray(10))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -158,7 +158,7 @@ func TestSessionSplitFetch(t *testing.T) {
 	ses.SetBaseTickDelay(time.Millisecond * 10)
 
 	for i := 0; i < 10; i++ {
-		ch, err := ses.GetBlocks(ctx, cids[i*10:(i+1)*10])
+		ch, err := ses.GetBlocks(ctx, cids[i*10:(i+1)*10], authArray(10))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -204,7 +204,7 @@ func TestFetchNotConnected(t *testing.T) {
 	ses := thisNode.Exchange.NewSession(ctx).(*bssession.Session)
 	ses.SetBaseTickDelay(time.Millisecond * 10)
 
-	ch, err := ses.GetBlocks(ctx, cids)
+	ch, err := ses.GetBlocks(ctx, cids, authArray(len(cids)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -252,7 +252,7 @@ func TestFetchAfterDisconnect(t *testing.T) {
 	ses := peerB.Exchange.NewSession(ctx).(*bssession.Session)
 	ses.SetBaseTickDelay(time.Millisecond * 10)
 
-	ch, err := ses.GetBlocks(ctx, cids)
+	ch, err := ses.GetBlocks(ctx, cids, authArray(len(cids)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -316,7 +316,7 @@ func TestInterestCacheOverflow(t *testing.T) {
 	b := inst[1]
 
 	ses := a.Exchange.NewSession(ctx)
-	zeroch, err := ses.GetBlocks(ctx, []cid.Cid{blks[0].Cid()})
+	zeroch, err := ses.GetBlocks(ctx, []cid.Cid{blks[0].Cid()}, authArray(1))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -326,7 +326,7 @@ func TestInterestCacheOverflow(t *testing.T) {
 		restcids = append(restcids, blk.Cid())
 	}
 
-	restch, err := ses.GetBlocks(ctx, restcids)
+	restch, err := ses.GetBlocks(ctx, restcids, authArray(len(restcids)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -373,7 +373,7 @@ func TestPutAfterSessionCacheEvict(t *testing.T) {
 		allcids = append(allcids, blk.Cid())
 	}
 
-	blkch, err := ses.GetBlocks(ctx, allcids)
+	blkch, err := ses.GetBlocks(ctx, allcids, authArray(len(allcids)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -410,14 +410,14 @@ func TestMultipleSessions(t *testing.T) {
 	ctx1, cancel1 := context.WithCancel(ctx)
 	ses := a.Exchange.NewSession(ctx1)
 
-	blkch, err := ses.GetBlocks(ctx, []cid.Cid{blk.Cid()})
+	blkch, err := ses.GetBlocks(ctx, []cid.Cid{blk.Cid()}, authArray(1))
 	if err != nil {
 		t.Fatal(err)
 	}
 	cancel1()
 
 	ses2 := a.Exchange.NewSession(ctx)
-	blkch2, err := ses2.GetBlocks(ctx, []cid.Cid{blk.Cid()})
+	blkch2, err := ses2.GetBlocks(ctx, []cid.Cid{blk.Cid()}, authArray(1))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -457,7 +457,7 @@ func TestWantlistClearsOnCancel(t *testing.T) {
 	ctx1, cancel1 := context.WithCancel(ctx)
 	ses := a.Exchange.NewSession(ctx1)
 
-	_, err := ses.GetBlocks(ctx, cids)
+	_, err := ses.GetBlocks(ctx, cids, authArray(len(cids)))
 	if err != nil {
 		t.Fatal(err)
 	}
