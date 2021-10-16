@@ -3,7 +3,7 @@ package session
 import (
 	"context"
 
-	bsbpm "github.com/ipfs/go-bitswap/internal/blockpresencemanager"
+	bsbpm "github.com/peergos/go-bitswap-auth/internal/blockpresencemanager"
 
 	cid "github.com/ipfs/go-cid"
 	peer "github.com/libp2p/go-libp2p-core/peer"

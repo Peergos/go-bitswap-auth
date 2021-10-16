@@ -9,9 +9,9 @@ import (
 
 	"github.com/google/uuid"
 
-	bsmsg "github.com/ipfs/go-bitswap/message"
-	pb "github.com/ipfs/go-bitswap/message/pb"
-	wl "github.com/ipfs/go-bitswap/wantlist"
+	bsmsg "github.com/peergos/go-bitswap-auth/message"
+	pb "github.com/peergos/go-bitswap-auth/message/pb"
+	wl "github.com/peergos/go-bitswap-auth/wantlist"
 	blocks "github.com/ipfs/go-block-format"
 	"github.com/ipfs/go-cid"
 	bstore "github.com/ipfs/go-ipfs-blockstore"

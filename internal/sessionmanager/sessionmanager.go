@@ -8,10 +8,10 @@ import (
 	cid "github.com/ipfs/go-cid"
 	delay "github.com/ipfs/go-ipfs-delay"
 
-	bsbpm "github.com/ipfs/go-bitswap/internal/blockpresencemanager"
-	notifications "github.com/ipfs/go-bitswap/internal/notifications"
-	bssession "github.com/ipfs/go-bitswap/internal/session"
-	bssim "github.com/ipfs/go-bitswap/internal/sessioninterestmanager"
+	bsbpm "github.com/peergos/go-bitswap-auth/internal/blockpresencemanager"
+	notifications "github.com/peergos/go-bitswap-auth/internal/notifications"
+	bssession "github.com/peergos/go-bitswap-auth/internal/session"
+	bssim "github.com/peergos/go-bitswap-auth/internal/sessioninterestmanager"
 	exchange "github.com/peergos/go-ipfs-exchange-interface-auth"
 	peer "github.com/libp2p/go-libp2p-core/peer"
 )

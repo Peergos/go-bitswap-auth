@@ -58,7 +58,7 @@ wants those blocks.
 ```golang
 import (
   "context"
-  bitswap "github.com/ipfs/go-bitswap"
+  bitswap "github.com/peergos/go-bitswap-auth"
   bsnet "github.com/ipfs/go-graphsync/network"
   blockstore "github.com/ipfs/go-ipfs-blockstore"
   "github.com/libp2p/go-libp2p-core/routing"

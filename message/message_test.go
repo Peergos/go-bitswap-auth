@@ -4,8 +4,8 @@ import (
 	"bytes"
 	"testing"
 
-	pb "github.com/ipfs/go-bitswap/message/pb"
-	"github.com/ipfs/go-bitswap/wantlist"
+	pb "github.com/peergos/go-bitswap-auth/message/pb"
+	"github.com/peergos/go-bitswap-auth/wantlist"
 	blocksutil "github.com/ipfs/go-ipfs-blocksutil"
 
 	blocks "github.com/ipfs/go-block-format"

@@ -3,7 +3,7 @@ package sessioninterestmanager
 import (
 	"testing"
 
-	"github.com/ipfs/go-bitswap/internal/testutil"
+	"github.com/peergos/go-bitswap-auth/internal/testutil"
 	cid "github.com/ipfs/go-cid"
 )
 

@@ -6,10 +6,10 @@ import (
 	"testing"
 	"time"
 
-	bsbpm "github.com/ipfs/go-bitswap/internal/blockpresencemanager"
-	bspm "github.com/ipfs/go-bitswap/internal/peermanager"
-	bsspm "github.com/ipfs/go-bitswap/internal/sessionpeermanager"
-	"github.com/ipfs/go-bitswap/internal/testutil"
+	bsbpm "github.com/peergos/go-bitswap-auth/internal/blockpresencemanager"
+	bspm "github.com/peergos/go-bitswap-auth/internal/peermanager"
+	bsspm "github.com/peergos/go-bitswap-auth/internal/sessionpeermanager"
+	"github.com/peergos/go-bitswap-auth/internal/testutil"
 	cid "github.com/ipfs/go-cid"
 	peer "github.com/libp2p/go-libp2p-core/peer"
 )
