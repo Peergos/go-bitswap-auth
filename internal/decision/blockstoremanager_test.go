@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/peergos/go-bitswap-auth/internal/testutil"
 	cid "github.com/ipfs/go-cid"
 	"github.com/ipfs/go-metrics-interface"
+	"github.com/peergos/go-bitswap-auth/internal/testutil"
 
 	blocks "github.com/ipfs/go-block-format"
 	ds "github.com/ipfs/go-datastore"

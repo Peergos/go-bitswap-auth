@@ -7,10 +7,10 @@ import (
 
 	blocks "github.com/ipfs/go-block-format"
 	cid "github.com/ipfs/go-cid"
-	"github.com/peergos/go-bitswap-auth/auth"
 	bstore "github.com/ipfs/go-ipfs-blockstore"
 	"github.com/ipfs/go-metrics-interface"
 	process "github.com/jbenet/goprocess"
+	"github.com/peergos/go-bitswap-auth/auth"
 )
 
 // blockstoreManager maintains a pool of workers that make requests to the blockstore.
@@ -127,7 +127,7 @@ func (bsm *blockstoreManager) jobPerKey(ctx context.Context, ks []cid.Cid, auth 
 	wg := sync.WaitGroup{}
 	for i, k := range ks {
 		c := k
-                a := auth[i]
+		a := auth[i]
 		wg.Add(1)
 		err = bsm.addJob(ctx, func() {
 			jobFn(c, a)

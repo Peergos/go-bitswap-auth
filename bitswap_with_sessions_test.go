@@ -6,16 +6,16 @@ import (
 	"testing"
 	"time"
 
-	bitswap "github.com/peergos/go-bitswap-auth"
-	bssession "github.com/peergos/go-bitswap-auth/internal/session"
-	testinstance "github.com/peergos/go-bitswap-auth/testinstance"
-	tn "github.com/peergos/go-bitswap-auth/testnet"
 	blocks "github.com/ipfs/go-block-format"
 	cid "github.com/ipfs/go-cid"
 	blocksutil "github.com/ipfs/go-ipfs-blocksutil"
 	delay "github.com/ipfs/go-ipfs-delay"
 	mockrouting "github.com/ipfs/go-ipfs-routing/mock"
 	tu "github.com/libp2p/go-libp2p-testing/etc"
+	bitswap "github.com/peergos/go-bitswap-auth"
+	bssession "github.com/peergos/go-bitswap-auth/internal/session"
+	testinstance "github.com/peergos/go-bitswap-auth/testinstance"
+	tn "github.com/peergos/go-bitswap-auth/testnet"
 )
 
 func TestBasicSessions(t *testing.T) {

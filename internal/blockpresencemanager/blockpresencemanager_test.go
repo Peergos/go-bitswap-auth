@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/peergos/go-bitswap-auth/internal/testutil"
 	peer "github.com/libp2p/go-libp2p-core/peer"
+	"github.com/peergos/go-bitswap-auth/internal/testutil"
 
 	cid "github.com/ipfs/go-cid"
 )

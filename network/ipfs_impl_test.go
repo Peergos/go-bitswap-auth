@@ -7,14 +7,14 @@ import (
 	"testing"
 	"time"
 
-	bsmsg "github.com/peergos/go-bitswap-auth/message"
-	pb "github.com/peergos/go-bitswap-auth/message/pb"
-	bsnet "github.com/peergos/go-bitswap-auth/network"
-	tn "github.com/peergos/go-bitswap-auth/testnet"
 	ds "github.com/ipfs/go-datastore"
 	blocksutil "github.com/ipfs/go-ipfs-blocksutil"
 	mockrouting "github.com/ipfs/go-ipfs-routing/mock"
 	"github.com/multiformats/go-multistream"
+	bsmsg "github.com/peergos/go-bitswap-auth/message"
+	pb "github.com/peergos/go-bitswap-auth/message/pb"
+	bsnet "github.com/peergos/go-bitswap-auth/network"
+	tn "github.com/peergos/go-bitswap-auth/testnet"
 
 	"github.com/libp2p/go-libp2p-core/host"
 	"github.com/libp2p/go-libp2p-core/network"

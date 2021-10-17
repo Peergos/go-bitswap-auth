@@ -4,17 +4,17 @@ import (
 	"context"
 	"time"
 
-	bsbpm "github.com/peergos/go-bitswap-auth/internal/blockpresencemanager"
-	bsgetter "github.com/peergos/go-bitswap-auth/internal/getter"
-	notifications "github.com/peergos/go-bitswap-auth/internal/notifications"
-	bspm "github.com/peergos/go-bitswap-auth/internal/peermanager"
-	bssim "github.com/peergos/go-bitswap-auth/internal/sessioninterestmanager"
 	blocks "github.com/ipfs/go-block-format"
 	cid "github.com/ipfs/go-cid"
 	delay "github.com/ipfs/go-ipfs-delay"
 	logging "github.com/ipfs/go-log"
 	peer "github.com/libp2p/go-libp2p-core/peer"
 	loggables "github.com/libp2p/go-libp2p-loggables"
+	bsbpm "github.com/peergos/go-bitswap-auth/internal/blockpresencemanager"
+	bsgetter "github.com/peergos/go-bitswap-auth/internal/getter"
+	notifications "github.com/peergos/go-bitswap-auth/internal/notifications"
+	bspm "github.com/peergos/go-bitswap-auth/internal/peermanager"
+	bssim "github.com/peergos/go-bitswap-auth/internal/sessioninterestmanager"
 	"go.uber.org/zap"
 )
 

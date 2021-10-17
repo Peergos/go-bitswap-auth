@@ -6,16 +6,16 @@ import (
 	"testing"
 	"time"
 
+	cid "github.com/ipfs/go-cid"
+	blocksutil "github.com/ipfs/go-ipfs-blocksutil"
+	delay "github.com/ipfs/go-ipfs-delay"
+	peer "github.com/libp2p/go-libp2p-core/peer"
 	bsbpm "github.com/peergos/go-bitswap-auth/internal/blockpresencemanager"
 	notifications "github.com/peergos/go-bitswap-auth/internal/notifications"
 	bspm "github.com/peergos/go-bitswap-auth/internal/peermanager"
 	bssim "github.com/peergos/go-bitswap-auth/internal/sessioninterestmanager"
 	bsspm "github.com/peergos/go-bitswap-auth/internal/sessionpeermanager"
 	"github.com/peergos/go-bitswap-auth/internal/testutil"
-	cid "github.com/ipfs/go-cid"
-	blocksutil "github.com/ipfs/go-ipfs-blocksutil"
-	delay "github.com/ipfs/go-ipfs-delay"
-	peer "github.com/libp2p/go-libp2p-core/peer"
 )
 
 type mockSessionMgr struct {

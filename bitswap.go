@@ -12,11 +12,18 @@ import (
 
 	delay "github.com/ipfs/go-ipfs-delay"
 
+	blocks "github.com/ipfs/go-block-format"
+	"github.com/ipfs/go-cid"
+	logging "github.com/ipfs/go-log"
+	"github.com/ipfs/go-metrics-interface"
+	process "github.com/jbenet/goprocess"
+	procctx "github.com/jbenet/goprocess/context"
+	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/peergos/go-bitswap-auth/auth"
 	deciface "github.com/peergos/go-bitswap-auth/decision"
 	bsbpm "github.com/peergos/go-bitswap-auth/internal/blockpresencemanager"
 	"github.com/peergos/go-bitswap-auth/internal/decision"
 	"github.com/peergos/go-bitswap-auth/internal/defaults"
-	"github.com/peergos/go-bitswap-auth/auth"
 	bsgetter "github.com/peergos/go-bitswap-auth/internal/getter"
 	bsmq "github.com/peergos/go-bitswap-auth/internal/messagequeue"
 	"github.com/peergos/go-bitswap-auth/internal/notifications"
@@ -28,14 +35,7 @@ import (
 	bsspm "github.com/peergos/go-bitswap-auth/internal/sessionpeermanager"
 	bsmsg "github.com/peergos/go-bitswap-auth/message"
 	bsnet "github.com/peergos/go-bitswap-auth/network"
-	blocks "github.com/ipfs/go-block-format"
-	"github.com/ipfs/go-cid"
 	exchange "github.com/peergos/go-ipfs-exchange-interface-auth"
-	logging "github.com/ipfs/go-log"
-	"github.com/ipfs/go-metrics-interface"
-	process "github.com/jbenet/goprocess"
-	procctx "github.com/jbenet/goprocess/context"
-	"github.com/libp2p/go-libp2p-core/peer"
 )
 
 var log = logging.Logger("bitswap")

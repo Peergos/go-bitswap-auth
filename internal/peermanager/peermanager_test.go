@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/peergos/go-bitswap-auth/internal/testutil"
 	cid "github.com/ipfs/go-cid"
+	"github.com/peergos/go-bitswap-auth/internal/testutil"
 
 	"github.com/libp2p/go-libp2p-core/peer"
 )

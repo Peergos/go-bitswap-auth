@@ -8,14 +8,6 @@ import (
 	"testing"
 	"time"
 
-	bitswap "github.com/peergos/go-bitswap-auth"
-	deciface "github.com/peergos/go-bitswap-auth/decision"
-	decision "github.com/peergos/go-bitswap-auth/internal/decision"
-	bssession "github.com/peergos/go-bitswap-auth/internal/session"
-	bsmsg "github.com/peergos/go-bitswap-auth/message"
-	pb "github.com/peergos/go-bitswap-auth/message/pb"
-	testinstance "github.com/peergos/go-bitswap-auth/testinstance"
-	tn "github.com/peergos/go-bitswap-auth/testnet"
 	blocks "github.com/ipfs/go-block-format"
 	cid "github.com/ipfs/go-cid"
 	detectrace "github.com/ipfs/go-detect-race"
@@ -27,6 +19,14 @@ import (
 	p2ptestutil "github.com/libp2p/go-libp2p-netutil"
 	travis "github.com/libp2p/go-libp2p-testing/ci/travis"
 	tu "github.com/libp2p/go-libp2p-testing/etc"
+	bitswap "github.com/peergos/go-bitswap-auth"
+	deciface "github.com/peergos/go-bitswap-auth/decision"
+	decision "github.com/peergos/go-bitswap-auth/internal/decision"
+	bssession "github.com/peergos/go-bitswap-auth/internal/session"
+	bsmsg "github.com/peergos/go-bitswap-auth/message"
+	pb "github.com/peergos/go-bitswap-auth/message/pb"
+	testinstance "github.com/peergos/go-bitswap-auth/testinstance"
+	tn "github.com/peergos/go-bitswap-auth/testnet"
 )
 
 // FIXME the tests are really sensitive to the network delay. fix them to work

@@ -9,10 +9,6 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/peergos/go-bitswap-auth/auth"
-	bsmsg "github.com/peergos/go-bitswap-auth/message"
-	pb "github.com/peergos/go-bitswap-auth/message/pb"
-	wl "github.com/peergos/go-bitswap-auth/wantlist"
 	blocks "github.com/ipfs/go-block-format"
 	"github.com/ipfs/go-cid"
 	logging "github.com/ipfs/go-log"
@@ -21,6 +17,10 @@ import (
 	"github.com/ipfs/go-peertaskqueue/peertask"
 	process "github.com/jbenet/goprocess"
 	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/peergos/go-bitswap-auth/auth"
+	bsmsg "github.com/peergos/go-bitswap-auth/message"
+	pb "github.com/peergos/go-bitswap-auth/message/pb"
+	wl "github.com/peergos/go-bitswap-auth/wantlist"
 )
 
 // TODO consider taking responsibility for other types of requests. For
@@ -412,7 +412,7 @@ func (e *Engine) nextEnvelope(ctx context.Context) (*Envelope, error) {
 		for _, t := range nextTasks {
 			c := t.Topic.(cid.Cid)
 			td := t.Data.(*taskData)
-                        a := td.Auth
+			a := td.Auth
 			if td.HaveBlock {
 				if td.IsWantBlock {
 					blockCids = append(blockCids, c)
@@ -522,11 +522,11 @@ func (e *Engine) MessageReceived(ctx context.Context, p peer.ID, m bsmsg.BitSwap
 
 	// Get block sizes
 	wants, cancels := e.splitWantsCancels(entries)
-        wantKs := make([]cid.Cid, 0, len(wants))
-        wantAuths := make([]string, 0, len(wants))
+	wantKs := make([]cid.Cid, 0, len(wants))
+	wantAuths := make([]string, 0, len(wants))
 	for _, entry := range wants {
 		wantKs = append(wantKs, entry.Cid)
-                wantAuths = append(wantAuths, entry.Auth)
+		wantAuths = append(wantAuths, entry.Auth)
 	}
 	blockSizes, err := e.bsm.getBlockSizes(ctx, wantKs, wantAuths)
 	if err != nil {

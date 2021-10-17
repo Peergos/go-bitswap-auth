@@ -11,11 +11,11 @@ import (
 	"time"
 
 	"github.com/benbjohnson/clock"
+	"github.com/ipfs/go-metrics-interface"
 	"github.com/peergos/go-bitswap-auth/internal/defaults"
 	"github.com/peergos/go-bitswap-auth/internal/testutil"
 	message "github.com/peergos/go-bitswap-auth/message"
 	pb "github.com/peergos/go-bitswap-auth/message/pb"
-	"github.com/ipfs/go-metrics-interface"
 
 	blocks "github.com/ipfs/go-block-format"
 	ds "github.com/ipfs/go-datastore"

@@ -10,14 +10,14 @@ import (
 	"time"
 
 	"github.com/benbjohnson/clock"
+	cid "github.com/ipfs/go-cid"
 	"github.com/peergos/go-bitswap-auth/internal/testutil"
 	pb "github.com/peergos/go-bitswap-auth/message/pb"
-	cid "github.com/ipfs/go-cid"
 
-	bsmsg "github.com/peergos/go-bitswap-auth/message"
-	bsnet "github.com/peergos/go-bitswap-auth/network"
 	peer "github.com/libp2p/go-libp2p-core/peer"
 	"github.com/libp2p/go-libp2p/p2p/protocol/ping"
+	bsmsg "github.com/peergos/go-bitswap-auth/message"
+	bsnet "github.com/peergos/go-bitswap-auth/network"
 )
 
 type fakeMessageNetwork struct {

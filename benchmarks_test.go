@@ -13,18 +13,18 @@ import (
 	"testing"
 	"time"
 
-	"github.com/peergos/go-bitswap-auth/internal/testutil"
 	blocks "github.com/ipfs/go-block-format"
 	protocol "github.com/libp2p/go-libp2p-core/protocol"
+	"github.com/peergos/go-bitswap-auth/internal/testutil"
 
+	cid "github.com/ipfs/go-cid"
+	delay "github.com/ipfs/go-ipfs-delay"
+	mockrouting "github.com/ipfs/go-ipfs-routing/mock"
 	bitswap "github.com/peergos/go-bitswap-auth"
 	bssession "github.com/peergos/go-bitswap-auth/internal/session"
 	bsnet "github.com/peergos/go-bitswap-auth/network"
 	testinstance "github.com/peergos/go-bitswap-auth/testinstance"
 	tn "github.com/peergos/go-bitswap-auth/testnet"
-	cid "github.com/ipfs/go-cid"
-	delay "github.com/ipfs/go-ipfs-delay"
-	mockrouting "github.com/ipfs/go-ipfs-routing/mock"
 )
 
 type fetchFunc func(b *testing.B, bs *bitswap.Bitswap, ks []cid.Cid)
@@ -509,11 +509,11 @@ func oneAtATime(b *testing.B, bs *bitswap.Bitswap, ks []cid.Cid) {
 }
 
 func authArray(size int) []string {
-     res := make([]string, size)
-     for i := 0; i < size; i++ {
-         res[i] = "auth"
-     }
-     return res
+	res := make([]string, size)
+	for i := 0; i < size; i++ {
+		res[i] = "auth"
+	}
+	return res
 }
 
 // fetch data in batches, 10 at a time

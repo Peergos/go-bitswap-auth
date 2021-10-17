@@ -5,12 +5,12 @@ import (
 	"fmt"
 	"time"
 
-	engine "github.com/peergos/go-bitswap-auth/internal/decision"
-	"github.com/peergos/go-bitswap-auth/internal/defaults"
-	pb "github.com/peergos/go-bitswap-auth/message/pb"
 	cid "github.com/ipfs/go-cid"
 	process "github.com/jbenet/goprocess"
 	procctx "github.com/jbenet/goprocess/context"
+	engine "github.com/peergos/go-bitswap-auth/internal/decision"
+	"github.com/peergos/go-bitswap-auth/internal/defaults"
+	pb "github.com/peergos/go-bitswap-auth/message/pb"
 	"go.uber.org/zap"
 )
 

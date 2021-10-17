@@ -8,12 +8,12 @@ import (
 	cid "github.com/ipfs/go-cid"
 	delay "github.com/ipfs/go-ipfs-delay"
 
+	peer "github.com/libp2p/go-libp2p-core/peer"
 	bsbpm "github.com/peergos/go-bitswap-auth/internal/blockpresencemanager"
 	notifications "github.com/peergos/go-bitswap-auth/internal/notifications"
 	bssession "github.com/peergos/go-bitswap-auth/internal/session"
 	bssim "github.com/peergos/go-bitswap-auth/internal/sessioninterestmanager"
 	exchange "github.com/peergos/go-ipfs-exchange-interface-auth"
-	peer "github.com/libp2p/go-libp2p-core/peer"
 )
 
 // Session is a session that is managed by the session manager
