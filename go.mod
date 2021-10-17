@@ -4,6 +4,7 @@ require (
 	github.com/benbjohnson/clock v1.1.0
 	github.com/cskr/pubsub v1.0.2
 	github.com/gogo/protobuf v1.3.2
+	github.com/google/protobuf v3.18.1+incompatible // indirect
 	github.com/google/uuid v1.2.0
 	github.com/ipfs/go-block-format v0.0.3
 	github.com/ipfs/go-cid v0.0.7
