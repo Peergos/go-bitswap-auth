@@ -6,6 +6,7 @@ import (
 
 // taskData is extra data associated with each task in the request queue
 type taskData struct {
+        Auth string
 	// Tasks can be want-have or want-block
 	IsWantBlock bool
 	// Whether to immediately send a response if the block is not found

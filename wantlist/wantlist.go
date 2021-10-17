@@ -18,6 +18,7 @@ type Wantlist struct {
 // Entry is an entry in a want list, consisting of a cid and its priority
 type Entry struct {
 	Cid      cid.Cid
+        Auth     string
 	Priority int32
 	WantType pb.Message_Wantlist_WantType
 }

@@ -7,6 +7,7 @@ import (
 
 	blocks "github.com/ipfs/go-block-format"
 	cid "github.com/ipfs/go-cid"
+	"github.com/peergos/go-bitswap-auth/auth"
 	bstore "github.com/ipfs/go-ipfs-blockstore"
 	"github.com/ipfs/go-metrics-interface"
 	process "github.com/jbenet/goprocess"
@@ -14,7 +15,7 @@ import (
 
 // blockstoreManager maintains a pool of workers that make requests to the blockstore.
 type blockstoreManager struct {
-	bs           bstore.Blockstore
+	bs           auth.AuthBlockstore
 	workerCount  int
 	jobs         chan func()
 	px           process.Process
@@ -26,7 +27,7 @@ type blockstoreManager struct {
 // and number of workers
 func newBlockstoreManager(
 	ctx context.Context,
-	bs bstore.Blockstore,
+	bs auth.AuthBlockstore,
 	workerCount int,
 	pendingGauge metrics.Gauge,
 	activeGauge metrics.Gauge,
@@ -77,14 +78,14 @@ func (bsm *blockstoreManager) addJob(ctx context.Context, job func()) error {
 	}
 }
 
-func (bsm *blockstoreManager) getBlockSizes(ctx context.Context, ks []cid.Cid) (map[cid.Cid]int, error) {
+func (bsm *blockstoreManager) getBlockSizes(ctx context.Context, ks []cid.Cid, auth []string) (map[cid.Cid]int, error) {
 	res := make(map[cid.Cid]int)
 	if len(ks) == 0 {
 		return res, nil
 	}
 
 	var lk sync.Mutex
-	return res, bsm.jobPerKey(ctx, ks, func(c cid.Cid) {
+	return res, bsm.jobPerKey(ctx, ks, auth, func(c cid.Cid, auth string) {
 		size, err := bsm.bs.GetSize(c)
 		if err != nil {
 			if err != bstore.ErrNotFound {
@@ -99,15 +100,15 @@ func (bsm *blockstoreManager) getBlockSizes(ctx context.Context, ks []cid.Cid) (
 	})
 }
 
-func (bsm *blockstoreManager) getBlocks(ctx context.Context, ks []cid.Cid) (map[cid.Cid]blocks.Block, error) {
+func (bsm *blockstoreManager) getBlocks(ctx context.Context, ks []cid.Cid, auth []string) (map[cid.Cid]blocks.Block, error) {
 	res := make(map[cid.Cid]blocks.Block)
 	if len(ks) == 0 {
 		return res, nil
 	}
 
 	var lk sync.Mutex
-	return res, bsm.jobPerKey(ctx, ks, func(c cid.Cid) {
-		blk, err := bsm.bs.Get(c)
+	return res, bsm.jobPerKey(ctx, ks, auth, func(c cid.Cid, auth string) {
+		blk, err := bsm.bs.Get(c, auth)
 		if err != nil {
 			if err != bstore.ErrNotFound {
 				// Note: this isn't a fatal error. We shouldn't abort the request
@@ -121,14 +122,15 @@ func (bsm *blockstoreManager) getBlocks(ctx context.Context, ks []cid.Cid) (map[
 	})
 }
 
-func (bsm *blockstoreManager) jobPerKey(ctx context.Context, ks []cid.Cid, jobFn func(c cid.Cid)) error {
+func (bsm *blockstoreManager) jobPerKey(ctx context.Context, ks []cid.Cid, auth []string, jobFn func(c cid.Cid, auth string)) error {
 	var err error
 	wg := sync.WaitGroup{}
-	for _, k := range ks {
+	for i, k := range ks {
 		c := k
+                a := auth[i]
 		wg.Add(1)
 		err = bsm.addJob(ctx, func() {
-			jobFn(c)
+			jobFn(c, a)
 			wg.Done()
 		})
 		if err != nil {

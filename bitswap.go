@@ -16,6 +16,7 @@ import (
 	bsbpm "github.com/peergos/go-bitswap-auth/internal/blockpresencemanager"
 	"github.com/peergos/go-bitswap-auth/internal/decision"
 	"github.com/peergos/go-bitswap-auth/internal/defaults"
+	"github.com/peergos/go-bitswap-auth/auth"
 	bsgetter "github.com/peergos/go-bitswap-auth/internal/getter"
 	bsmq "github.com/peergos/go-bitswap-auth/internal/messagequeue"
 	"github.com/peergos/go-bitswap-auth/internal/notifications"
@@ -29,7 +30,6 @@ import (
 	bsnet "github.com/peergos/go-bitswap-auth/network"
 	blocks "github.com/ipfs/go-block-format"
 	"github.com/ipfs/go-cid"
-	blockstore "github.com/ipfs/go-ipfs-blockstore"
 	exchange "github.com/peergos/go-ipfs-exchange-interface-auth"
 	logging "github.com/ipfs/go-log"
 	"github.com/ipfs/go-metrics-interface"
@@ -152,7 +152,7 @@ func SetSimulateDontHavesOnTimeout(send bool) Option {
 // BitSwapNetwork. This function registers the returned instance as the network
 // delegate. Runs until context is cancelled or bitswap.Close is called.
 func New(parent context.Context, network bsnet.BitSwapNetwork,
-	bstore blockstore.Blockstore, options ...Option) exchange.Interface {
+	bstore auth.AuthBlockstore, options ...Option) exchange.Interface {
 
 	// important to use provided parent context (since it may include important
 	// loggable data). It's probably not a good idea to allow bitswap to be
@@ -310,7 +310,7 @@ type Bitswap struct {
 
 	// blockstore is the local database
 	// NB: ensure threadsafety
-	blockstore blockstore.Blockstore
+	blockstore auth.AuthBlockstore
 
 	// manages channels of outgoing blocks for sessions
 	notif notifications.PubSub

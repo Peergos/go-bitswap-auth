@@ -9,12 +9,12 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/peergos/go-bitswap-auth/auth"
 	bsmsg "github.com/peergos/go-bitswap-auth/message"
 	pb "github.com/peergos/go-bitswap-auth/message/pb"
 	wl "github.com/peergos/go-bitswap-auth/wantlist"
 	blocks "github.com/ipfs/go-block-format"
 	"github.com/ipfs/go-cid"
-	bstore "github.com/ipfs/go-ipfs-blockstore"
 	logging "github.com/ipfs/go-log"
 	"github.com/ipfs/go-metrics-interface"
 	"github.com/ipfs/go-peertaskqueue"
@@ -182,7 +182,7 @@ type Engine struct {
 // work already outstanding.
 func NewEngine(
 	ctx context.Context,
-	bs bstore.Blockstore,
+	bs auth.AuthBlockstore,
 	bstoreWorkerCount,
 	engineTaskWorkerCount, maxOutstandingBytesPerPeer int,
 	peerTagger PeerTagger,
@@ -212,7 +212,7 @@ func NewEngine(
 
 func newEngine(
 	ctx context.Context,
-	bs bstore.Blockstore,
+	bs auth.AuthBlockstore,
 	bstoreWorkerCount,
 	engineTaskWorkerCount, maxOutstandingBytesPerPeer int,
 	peerTagger PeerTagger,
@@ -407,13 +407,16 @@ func (e *Engine) nextEnvelope(ctx context.Context) (*Envelope, error) {
 
 		// Split out want-blocks, want-haves and DONT_HAVEs
 		blockCids := make([]cid.Cid, 0, len(nextTasks))
+		blockAuths := make([]string, 0, len(nextTasks))
 		blockTasks := make(map[cid.Cid]*taskData, len(nextTasks))
 		for _, t := range nextTasks {
 			c := t.Topic.(cid.Cid)
 			td := t.Data.(*taskData)
+                        a := td.Auth
 			if td.HaveBlock {
 				if td.IsWantBlock {
 					blockCids = append(blockCids, c)
+					blockAuths = append(blockAuths, a)
 					blockTasks[c] = td
 				} else {
 					// Add HAVES to the message
@@ -426,7 +429,7 @@ func (e *Engine) nextEnvelope(ctx context.Context) (*Envelope, error) {
 		}
 
 		// Fetch blocks from datastore
-		blks, err := e.bsm.getBlocks(ctx, blockCids)
+		blks, err := e.bsm.getBlocks(ctx, blockCids, blockAuths)
 		if err != nil {
 			// we're dropping the envelope but that's not an issue in practice.
 			return nil, err
@@ -519,11 +522,13 @@ func (e *Engine) MessageReceived(ctx context.Context, p peer.ID, m bsmsg.BitSwap
 
 	// Get block sizes
 	wants, cancels := e.splitWantsCancels(entries)
-	wantKs := cid.NewSet()
+        wantKs := make([]cid.Cid, 0, len(wants))
+        wantAuths := make([]string, 0, len(wants))
 	for _, entry := range wants {
-		wantKs.Add(entry.Cid)
+		wantKs = append(wantKs, entry.Cid)
+                wantAuths = append(wantAuths, entry.Auth)
 	}
-	blockSizes, err := e.bsm.getBlockSizes(ctx, wantKs.Keys())
+	blockSizes, err := e.bsm.getBlockSizes(ctx, wantKs, wantAuths)
 	if err != nil {
 		log.Info("aborting message processing", err)
 		return
