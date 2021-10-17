@@ -429,7 +429,7 @@ func (e *Engine) nextEnvelope(ctx context.Context) (*Envelope, error) {
 		}
 
 		// Fetch blocks from datastore
-		blks, err := e.bsm.getBlocks(ctx, blockCids, blockAuths)
+		blks, err := e.bsm.getBlocks(ctx, blockCids, blockAuths, p)
 		if err != nil {
 			// we're dropping the envelope but that's not an issue in practice.
 			return nil, err
@@ -528,7 +528,7 @@ func (e *Engine) MessageReceived(ctx context.Context, p peer.ID, m bsmsg.BitSwap
 		wantKs = append(wantKs, entry.Cid)
 		wantAuths = append(wantAuths, entry.Auth)
 	}
-	blockSizes, err := e.bsm.getBlockSizes(ctx, wantKs, wantAuths)
+	blockSizes, err := e.bsm.getBlockSizes(ctx, wantKs, wantAuths, p)
 	if err != nil {
 		log.Info("aborting message processing", err)
 		return

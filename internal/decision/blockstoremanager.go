@@ -11,6 +11,7 @@ import (
 	"github.com/ipfs/go-metrics-interface"
 	process "github.com/jbenet/goprocess"
 	"github.com/peergos/go-bitswap-auth/auth"
+        peer "github.com/libp2p/go-libp2p-core/peer"
 )
 
 // blockstoreManager maintains a pool of workers that make requests to the blockstore.
@@ -78,14 +79,14 @@ func (bsm *blockstoreManager) addJob(ctx context.Context, job func()) error {
 	}
 }
 
-func (bsm *blockstoreManager) getBlockSizes(ctx context.Context, ks []cid.Cid, auth []string) (map[cid.Cid]int, error) {
+func (bsm *blockstoreManager) getBlockSizes(ctx context.Context, ks []cid.Cid, auth []string, remote peer.ID) (map[cid.Cid]int, error) {
 	res := make(map[cid.Cid]int)
 	if len(ks) == 0 {
 		return res, nil
 	}
 
 	var lk sync.Mutex
-	return res, bsm.jobPerKey(ctx, ks, auth, func(c cid.Cid, auth string) {
+	return res, bsm.jobPerKey(ctx, ks, auth, remote, func(c cid.Cid, remote peer.ID, auth string) {
 		size, err := bsm.bs.GetSize(c)
 		if err != nil {
 			if err != bstore.ErrNotFound {
@@ -100,15 +101,15 @@ func (bsm *blockstoreManager) getBlockSizes(ctx context.Context, ks []cid.Cid, a
 	})
 }
 
-func (bsm *blockstoreManager) getBlocks(ctx context.Context, ks []cid.Cid, auth []string) (map[cid.Cid]blocks.Block, error) {
+func (bsm *blockstoreManager) getBlocks(ctx context.Context, ks []cid.Cid, auth []string, remote peer.ID) (map[cid.Cid]blocks.Block, error) {
 	res := make(map[cid.Cid]blocks.Block)
 	if len(ks) == 0 {
 		return res, nil
 	}
 
 	var lk sync.Mutex
-	return res, bsm.jobPerKey(ctx, ks, auth, func(c cid.Cid, auth string) {
-		blk, err := bsm.bs.Get(c, auth)
+	return res, bsm.jobPerKey(ctx, ks, auth, remote, func(c cid.Cid, remote peer.ID, auth string) {
+		blk, err := bsm.bs.Get(c, remote, auth)
 		if err != nil {
 			if err != bstore.ErrNotFound {
 				// Note: this isn't a fatal error. We shouldn't abort the request
@@ -122,7 +123,7 @@ func (bsm *blockstoreManager) getBlocks(ctx context.Context, ks []cid.Cid, auth 
 	})
 }
 
-func (bsm *blockstoreManager) jobPerKey(ctx context.Context, ks []cid.Cid, auth []string, jobFn func(c cid.Cid, auth string)) error {
+func (bsm *blockstoreManager) jobPerKey(ctx context.Context, ks []cid.Cid, auth []string, remote peer.ID, jobFn func(c cid.Cid, remote peer.ID, auth string)) error {
 	var err error
 	wg := sync.WaitGroup{}
 	for i, k := range ks {
@@ -130,7 +131,7 @@ func (bsm *blockstoreManager) jobPerKey(ctx context.Context, ks []cid.Cid, auth 
 		a := auth[i]
 		wg.Add(1)
 		err = bsm.addJob(ctx, func() {
-			jobFn(c, a)
+			jobFn(c, remote, a)
 			wg.Done()
 		})
 		if err != nil {
