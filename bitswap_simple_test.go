@@ -9,7 +9,7 @@ import (
 	delay "github.com/ipfs/go-ipfs-delay"
 	mockrouting "github.com/ipfs/go-ipfs-routing/mock"
 	"github.com/peergos/go-bitswap-auth/auth"
-	"github.com/peergos/go-bitswap-auth/testinstance"
+	testinstance "github.com/peergos/go-bitswap-auth/testinstance"
 	tn "github.com/peergos/go-bitswap-auth/testnet"
 )
 
