@@ -4,18 +4,18 @@ import (
 	"context"
 	"time"
 
+	cid "github.com/ipfs/go-cid"
 	ds "github.com/ipfs/go-datastore"
 	delayed "github.com/ipfs/go-datastore/delayed"
 	ds_sync "github.com/ipfs/go-datastore/sync"
-	auth "github.com/peergos/go-bitswap-auth/auth"
-	cid "github.com/ipfs/go-cid"
+	blockstore "github.com/ipfs/go-ipfs-blockstore"
 	delay "github.com/ipfs/go-ipfs-delay"
 	peer "github.com/libp2p/go-libp2p-core/peer"
 	p2ptestutil "github.com/libp2p/go-libp2p-netutil"
 	tnet "github.com/libp2p/go-libp2p-testing/net"
 	bitswap "github.com/peergos/go-bitswap-auth"
-	blockstore "github.com/ipfs/go-ipfs-blockstore"
-        bsnet "github.com/peergos/go-bitswap-auth/network"
+	auth "github.com/peergos/go-bitswap-auth/auth"
+	bsnet "github.com/peergos/go-bitswap-auth/network"
 	tn "github.com/peergos/go-bitswap-auth/testnet"
 )
 
@@ -41,7 +41,7 @@ type InstanceGenerator struct {
 	cancel     context.CancelFunc
 	bsOptions  []bitswap.Option
 	netOptions []bsnet.NetOpt
-        allow      func(cid.Cid, peer.ID, string)bool
+	allow      func(cid.Cid, peer.ID, string) bool
 }
 
 // Close closes the clobal context, shutting down all test instances
@@ -110,7 +110,7 @@ func (i *Instance) SetBlockstoreLatency(t time.Duration) time.Duration {
 // NB: It's easy make mistakes by providing the same peer ID to two different
 // instances. To safeguard, use the InstanceGenerator to generate instances. It's
 // just a much better idea.
-func NewInstance(ctx context.Context, net tn.Network, p tnet.Identity, netOptions []bsnet.NetOpt, bsOptions []bitswap.Option, allow func(cid.Cid, peer.ID, string)bool) Instance {
+func NewInstance(ctx context.Context, net tn.Network, p tnet.Identity, netOptions []bsnet.NetOpt, bsOptions []bitswap.Option, allow func(cid.Cid, peer.ID, string) bool) Instance {
 	bsdelay := delay.Fixed(0)
 
 	adapter := net.Adapter(p, netOptions...)
@@ -123,7 +123,7 @@ func NewInstance(ctx context.Context, net tn.Network, p tnet.Identity, netOption
 		panic(err.Error()) // FIXME perhaps change signature and return error.
 	}
 
-        authbstore := auth.NewAuthBlockstore(bstore, allow)
+	authbstore := auth.NewAuthBlockstore(bstore, allow)
 
 	bs := bitswap.New(ctx, adapter, authbstore, bsOptions...).(*bitswap.Bitswap)
 

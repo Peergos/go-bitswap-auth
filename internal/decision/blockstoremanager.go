@@ -10,8 +10,8 @@ import (
 	bstore "github.com/ipfs/go-ipfs-blockstore"
 	"github.com/ipfs/go-metrics-interface"
 	process "github.com/jbenet/goprocess"
+	peer "github.com/libp2p/go-libp2p-core/peer"
 	"github.com/peergos/go-bitswap-auth/auth"
-        peer "github.com/libp2p/go-libp2p-core/peer"
 )
 
 // blockstoreManager maintains a pool of workers that make requests to the blockstore.

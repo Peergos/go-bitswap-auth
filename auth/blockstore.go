@@ -2,12 +2,12 @@ package auth
 
 import (
 	"context"
-        "errors"
+	"errors"
 
 	blocks "github.com/ipfs/go-block-format"
 	cid "github.com/ipfs/go-cid"
 	blockstore "github.com/ipfs/go-ipfs-blockstore"
-        peer "github.com/libp2p/go-libp2p-core/peer"
+	peer "github.com/libp2p/go-libp2p-core/peer"
 )
 
 type AuthBlockstore interface {
@@ -41,41 +41,41 @@ type AuthedBlockstore struct {
 	AuthBlockstore
 }
 
-func NewAuthBlockstore(bstore blockstore.Blockstore, allow func(cid.Cid, peer.ID, string)bool) AuthBlockstore {
-     return &AuthedBlockstore{source: bstore, allow: allow}
+func NewAuthBlockstore(bstore blockstore.Blockstore, allow func(cid.Cid, peer.ID, string) bool) AuthBlockstore {
+	return &AuthedBlockstore{source: bstore, allow: allow}
 }
 
 func (bs *AuthedBlockstore) Get(c cid.Cid, remote peer.ID, auth string) (blocks.Block, error) {
-     if bs.allow(c, remote, auth) {
-        return bs.source.Get(c)
-     }
-     return nil, errors.New("Unauthorised")
+	if bs.allow(c, remote, auth) {
+		return bs.source.Get(c)
+	}
+	return nil, errors.New("Unauthorised")
 }
 
 func (bs *AuthedBlockstore) DeleteBlock(c cid.Cid) error {
-     return bs.source.DeleteBlock(c)
+	return bs.source.DeleteBlock(c)
 }
 
-func (bs *AuthedBlockstore) Has(c cid.Cid) (bool, error){
-     return bs.source.Has(c)
+func (bs *AuthedBlockstore) Has(c cid.Cid) (bool, error) {
+	return bs.source.Has(c)
 }
 
-func (bs *AuthedBlockstore) GetSize(c cid.Cid) (int, error){
-     return bs.source.GetSize(c)
+func (bs *AuthedBlockstore) GetSize(c cid.Cid) (int, error) {
+	return bs.source.GetSize(c)
 }
 
-func (bs *AuthedBlockstore) Put(b blocks.Block) error{
-     return bs.source.Put(b)
+func (bs *AuthedBlockstore) Put(b blocks.Block) error {
+	return bs.source.Put(b)
 }
 
-func (bs *AuthedBlockstore) PutMany(blocks []blocks.Block) error{
-     return bs.source.PutMany(blocks)
+func (bs *AuthedBlockstore) PutMany(blocks []blocks.Block) error {
+	return bs.source.PutMany(blocks)
 }
 
 func (bs *AuthedBlockstore) AllKeysChan(ctx context.Context) (<-chan cid.Cid, error) {
-     return bs.source.AllKeysChan(ctx)
+	return bs.source.AllKeysChan(ctx)
 }
 
-func (bs *AuthedBlockstore) HashOnRead(enabled bool){
-     bs.source.HashOnRead(enabled)
+func (bs *AuthedBlockstore) HashOnRead(enabled bool) {
+	bs.source.HashOnRead(enabled)
 }
