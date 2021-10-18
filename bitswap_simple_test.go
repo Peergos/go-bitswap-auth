@@ -36,25 +36,27 @@ func TestSimpleBlockExchangeWithAuth(t *testing.T) {
 	}
 
 	//test that I only retrieve block from auth.blockstore with the correct auth string
-	block_from_auth_blockstore, err := my_instances[0].Blockstore().Get(my_block.Cid(), my_instances[0].Peer, invalid_auth)
+	_, err = my_instances[0].Blockstore().Get(my_block.Cid(), my_instances[0].Peer, invalid_auth)
 	if err == nil {
 		t.Fatal("Able to retrieve block from block store using invalid auth string!")
 	}
 
-	block_from_auth_blockstore, err = my_instances[0].Blockstore().Get(my_block.Cid(), my_instances[0].Peer, valid_auth)
+	block_from_auth_blockstore, err := my_instances[0].Blockstore().Get(my_block.Cid(), my_instances[0].Peer, valid_auth)
 	if err != nil {
 		t.Fatal(err)
 	} else if my_block.Cid() != block_from_auth_blockstore.Cid() {
 		t.Fatal("expected to retrieve the same block I stored")
 	}
-
+        
+        fmt.Println("This is hanging...")
 	//test that I only receive a block from a peer when I provide the correct auth string
-	received_block, err := my_instances[1].Exchange.GetBlock(context.Background(), my_block.Cid(), invalid_auth)
+	_, err = my_instances[1].Exchange.GetBlock(context.Background(), my_block.Cid(), invalid_auth)
 	if err == nil {
 		t.Fatal("Peer released block upon receiving request containing an invalid auth string!")
 	}
-
-	received_block, err = my_instances[1].Exchange.GetBlock(context.Background(), my_block.Cid(), valid_auth)
+        fmt.Println("escaped hang!")
+        
+	received_block, err := my_instances[1].Exchange.GetBlock(context.Background(), my_block.Cid(), valid_auth)
 	if err != nil {
 		t.Fatal(err)
 	} else if my_block.Cid() != received_block.Cid() {
