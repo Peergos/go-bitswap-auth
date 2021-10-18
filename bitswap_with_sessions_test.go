@@ -11,6 +11,7 @@ import (
 	blocksutil "github.com/ipfs/go-ipfs-blocksutil"
 	delay "github.com/ipfs/go-ipfs-delay"
 	mockrouting "github.com/ipfs/go-ipfs-routing/mock"
+	peer "github.com/libp2p/go-libp2p-core/peer"
 	tu "github.com/libp2p/go-libp2p-testing/etc"
 	bitswap "github.com/peergos/go-bitswap-auth"
 	bssession "github.com/peergos/go-bitswap-auth/internal/session"
@@ -23,7 +24,10 @@ func TestBasicSessions(t *testing.T) {
 	defer cancel()
 
 	vnet := getVirtualNetwork()
-	ig := testinstance.NewTestInstanceGenerator(vnet, nil, nil)
+	allow := func(c cid.Cid, p peer.ID, a string) bool {
+		return true
+	}
+	ig := testinstance.NewTestInstanceGenerator(vnet, nil, nil, allow)
 	defer ig.Close()
 	bgen := blocksutil.NewBlockGenerator()
 
@@ -74,7 +78,10 @@ func TestSessionBetweenPeers(t *testing.T) {
 	defer cancel()
 
 	vnet := tn.VirtualNetwork(mockrouting.NewServer(), delay.Fixed(time.Millisecond))
-	ig := testinstance.NewTestInstanceGenerator(vnet, nil, []bitswap.Option{bitswap.SetSimulateDontHavesOnTimeout(false)})
+	allow := func(c cid.Cid, p peer.ID, a string) bool {
+		return true
+	}
+	ig := testinstance.NewTestInstanceGenerator(vnet, nil, []bitswap.Option{bitswap.SetSimulateDontHavesOnTimeout(false)}, allow)
 	defer ig.Close()
 	bgen := blocksutil.NewBlockGenerator()
 
@@ -134,7 +141,10 @@ func TestSessionSplitFetch(t *testing.T) {
 	defer cancel()
 
 	vnet := getVirtualNetwork()
-	ig := testinstance.NewTestInstanceGenerator(vnet, nil, nil)
+	allow := func(c cid.Cid, p peer.ID, a string) bool {
+		return true
+	}
+	ig := testinstance.NewTestInstanceGenerator(vnet, nil, nil, allow)
 	defer ig.Close()
 	bgen := blocksutil.NewBlockGenerator()
 
@@ -178,7 +188,10 @@ func TestFetchNotConnected(t *testing.T) {
 	defer cancel()
 
 	vnet := getVirtualNetwork()
-	ig := testinstance.NewTestInstanceGenerator(vnet, nil, []bitswap.Option{bitswap.ProviderSearchDelay(10 * time.Millisecond)})
+	allow := func(c cid.Cid, p peer.ID, a string) bool {
+		return true
+	}
+	ig := testinstance.NewTestInstanceGenerator(vnet, nil, []bitswap.Option{bitswap.ProviderSearchDelay(10 * time.Millisecond)}, allow)
 	defer ig.Close()
 	bgen := blocksutil.NewBlockGenerator()
 
@@ -223,10 +236,13 @@ func TestFetchAfterDisconnect(t *testing.T) {
 	defer cancel()
 
 	vnet := getVirtualNetwork()
+	allow := func(c cid.Cid, p peer.ID, a string) bool {
+		return true
+	}
 	ig := testinstance.NewTestInstanceGenerator(vnet, nil, []bitswap.Option{
 		bitswap.ProviderSearchDelay(10 * time.Millisecond),
 		bitswap.RebroadcastDelay(delay.Fixed(15 * time.Millisecond)),
-	})
+	}, allow)
 	defer ig.Close()
 	bgen := blocksutil.NewBlockGenerator()
 
@@ -305,7 +321,10 @@ func TestInterestCacheOverflow(t *testing.T) {
 	defer cancel()
 
 	vnet := getVirtualNetwork()
-	ig := testinstance.NewTestInstanceGenerator(vnet, nil, nil)
+	allow := func(c cid.Cid, p peer.ID, a string) bool {
+		return true
+	}
+	ig := testinstance.NewTestInstanceGenerator(vnet, nil, nil, allow)
 	defer ig.Close()
 	bgen := blocksutil.NewBlockGenerator()
 
@@ -357,7 +376,10 @@ func TestPutAfterSessionCacheEvict(t *testing.T) {
 	defer cancel()
 
 	vnet := getVirtualNetwork()
-	ig := testinstance.NewTestInstanceGenerator(vnet, nil, nil)
+	allow := func(c cid.Cid, p peer.ID, a string) bool {
+		return true
+	}
+	ig := testinstance.NewTestInstanceGenerator(vnet, nil, nil, allow)
 	defer ig.Close()
 	bgen := blocksutil.NewBlockGenerator()
 
@@ -397,7 +419,10 @@ func TestMultipleSessions(t *testing.T) {
 	defer cancel()
 
 	vnet := getVirtualNetwork()
-	ig := testinstance.NewTestInstanceGenerator(vnet, nil, nil)
+	allow := func(c cid.Cid, p peer.ID, a string) bool {
+		return true
+	}
+	ig := testinstance.NewTestInstanceGenerator(vnet, nil, nil, allow)
 	defer ig.Close()
 	bgen := blocksutil.NewBlockGenerator()
 
@@ -440,7 +465,10 @@ func TestWantlistClearsOnCancel(t *testing.T) {
 	defer cancel()
 
 	vnet := getVirtualNetwork()
-	ig := testinstance.NewTestInstanceGenerator(vnet, nil, nil)
+	allow := func(c cid.Cid, p peer.ID, a string) bool {
+		return true
+	}
+	ig := testinstance.NewTestInstanceGenerator(vnet, nil, nil, allow)
 	defer ig.Close()
 	bgen := blocksutil.NewBlockGenerator()
 

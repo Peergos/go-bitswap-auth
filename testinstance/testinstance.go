@@ -21,7 +21,7 @@ import (
 
 // NewTestInstanceGenerator generates a new InstanceGenerator for the given
 // testnet
-func NewTestInstanceGenerator(net tn.Network, netOptions []bsnet.NetOpt, bsOptions []bitswap.Option) InstanceGenerator {
+func NewTestInstanceGenerator(net tn.Network, netOptions []bsnet.NetOpt, bsOptions []bitswap.Option, allow func(cid.Cid, peer.ID, string) bool) InstanceGenerator {
 	ctx, cancel := context.WithCancel(context.Background())
 	return InstanceGenerator{
 		net:        net,
@@ -30,6 +30,7 @@ func NewTestInstanceGenerator(net tn.Network, netOptions []bsnet.NetOpt, bsOptio
 		cancel:     cancel,
 		bsOptions:  bsOptions,
 		netOptions: netOptions,
+		allow:      allow,
 	}
 }
 

@@ -20,6 +20,7 @@ import (
 	cid "github.com/ipfs/go-cid"
 	delay "github.com/ipfs/go-ipfs-delay"
 	mockrouting "github.com/ipfs/go-ipfs-routing/mock"
+	peer "github.com/libp2p/go-libp2p-core/peer"
 	bitswap "github.com/peergos/go-bitswap-auth"
 	bssession "github.com/peergos/go-bitswap-auth/internal/session"
 	bsnet "github.com/peergos/go-bitswap-auth/network"
@@ -151,10 +152,13 @@ func BenchmarkFetchFromOldBitswap(b *testing.B) {
 			oldProtocol := []protocol.ID{bsnet.ProtocolBitswapOneOne}
 			oldNetOpts := []bsnet.NetOpt{bsnet.SupportedProtocols(oldProtocol)}
 			oldBsOpts := []bitswap.Option{bitswap.SetSendDontHaves(false)}
-			oldNodeGenerator := testinstance.NewTestInstanceGenerator(net, oldNetOpts, oldBsOpts)
+			allow := func(c cid.Cid, p peer.ID, a string) bool {
+				return true
+			}
+			oldNodeGenerator := testinstance.NewTestInstanceGenerator(net, oldNetOpts, oldBsOpts, allow)
 
 			// Regular new Bitswap node
-			newNodeGenerator := testinstance.NewTestInstanceGenerator(net, nil, nil)
+			newNodeGenerator := testinstance.NewTestInstanceGenerator(net, nil, nil, allow)
 			var instances []testinstance.Instance
 
 			// Create new nodes (fetchers + seeds)
@@ -296,7 +300,10 @@ func BenchmarkDatacenterMultiLeechMultiSeed(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			net := tn.RateLimitedVirtualNetwork(mockrouting.NewServer(), d, rateLimitGenerator)
 
-			ig := testinstance.NewTestInstanceGenerator(net, nil, nil)
+			allow := func(c cid.Cid, p peer.ID, a string) bool {
+				return true
+			}
+			ig := testinstance.NewTestInstanceGenerator(net, nil, nil, allow)
 			defer ig.Close()
 
 			instances := ig.Instances(numnodes)
@@ -314,7 +321,10 @@ func subtestDistributeAndFetch(b *testing.B, numnodes, numblks int, d delay.D, b
 	for i := 0; i < b.N; i++ {
 		net := tn.VirtualNetwork(mockrouting.NewServer(), d)
 
-		ig := testinstance.NewTestInstanceGenerator(net, nil, nil)
+		allow := func(c cid.Cid, p peer.ID, a string) bool {
+			return true
+		}
+		ig := testinstance.NewTestInstanceGenerator(net, nil, nil, allow)
 
 		instances := ig.Instances(numnodes)
 		rootBlock := testutil.GenerateBlocksOfSize(1, rootBlockSize)
@@ -329,7 +339,10 @@ func subtestDistributeAndFetchRateLimited(b *testing.B, numnodes, numblks int, d
 	for i := 0; i < b.N; i++ {
 		net := tn.RateLimitedVirtualNetwork(mockrouting.NewServer(), d, rateLimitGenerator)
 
-		ig := testinstance.NewTestInstanceGenerator(net, nil, nil)
+		allow := func(c cid.Cid, p peer.ID, a string) bool {
+			return true
+		}
+		ig := testinstance.NewTestInstanceGenerator(net, nil, nil, allow)
 		defer ig.Close()
 
 		instances := ig.Instances(numnodes)
