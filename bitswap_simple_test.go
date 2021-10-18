@@ -10,7 +10,7 @@ import (
 	delay "github.com/ipfs/go-ipfs-delay"
 	mockrouting "github.com/ipfs/go-ipfs-routing/mock"
 	peer "github.com/libp2p/go-libp2p-core/peer"
-	//"github.com/peergos/go-bitswap-auth/auth"
+	"github.com/peergos/go-bitswap-auth/auth"
 	testinstance "github.com/peergos/go-bitswap-auth/testinstance"
 	tn "github.com/peergos/go-bitswap-auth/testnet"
 )
@@ -25,7 +25,7 @@ func TestSimpleBlockExchangeWithAuth(t *testing.T) {
 	}
 	ig := testinstance.NewTestInstanceGenerator(tn.VirtualNetwork(mockrouting.NewServer(), delay.Fixed(0)), nil, nil, allow)
 	my_instances := ig.Instances(2)
-	my_instances[0].Blockstore().Put(my_block)
+	my_instances[0].Blockstore().Put(auth.NewBlock(my_block))
 
 	//test auth.blockstore; expect that the blockstore of instance[0] has my_block
 	has_block, err := my_instances[0].Blockstore().Has(my_block.Cid())

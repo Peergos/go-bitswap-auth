@@ -131,7 +131,7 @@ func (bs *Bitswap) sendBlocks(ctx context.Context, env *engine.Envelope) {
 	dataSent := 0
 	blocks := env.Message.Blocks()
 	for _, b := range blocks {
-		dataSent += len(b.RawData())
+		dataSent += b.Size()
 	}
 	bs.counterLk.Lock()
 	bs.counters.blocksSent += uint64(len(blocks))

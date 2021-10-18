@@ -12,7 +12,7 @@ import (
 	cid "github.com/ipfs/go-cid"
 	pool "github.com/libp2p/go-buffer-pool"
 	msgio "github.com/libp2p/go-msgio"
-
+        "github.com/peergos/go-bitswap-auth/auth"
 	u "github.com/ipfs/go-ipfs-util"
 	"github.com/libp2p/go-libp2p-core/network"
 )
@@ -25,7 +25,7 @@ type BitSwapMessage interface {
 	Wantlist() []Entry
 
 	// Blocks returns a slice of unique blocks.
-	Blocks() []blocks.Block
+	Blocks() []auth.AuthBlock
 	// BlockPresences returns the list of HAVE / DONT_HAVE in the message
 	BlockPresences() []BlockPresence
 	// Haves returns the Cids for each HAVE
@@ -144,7 +144,8 @@ func maxEntrySize() int {
 type impl struct {
 	full           bool
 	wantlist       map[cid.Cid]*Entry
-	blocks         map[cid.Cid]blocks.Block
+	blocks         map[cid.Cid]auth.AuthBlock
+	rawData        map[cid.Cid][]byte
 	blockPresences map[cid.Cid]pb.Message_BlockPresenceType
 	pendingBytes   int32
 }
@@ -158,7 +159,7 @@ func newMsg(full bool) *impl {
 	return &impl{
 		full:           full,
 		wantlist:       make(map[cid.Cid]*Entry),
-		blocks:         make(map[cid.Cid]blocks.Block),
+		blocks:         make(map[cid.Cid]auth.AuthBlock),
 		blockPresences: make(map[cid.Cid]pb.Message_BlockPresenceType),
 	}
 }
@@ -260,8 +261,8 @@ func (m *impl) Wantlist() []Entry {
 	return out
 }
 
-func (m *impl) Blocks() []blocks.Block {
-	bs := make([]blocks.Block, 0, len(m.blocks))
+func (m *impl) Blocks() []auth.AuthBlock {
+	bs := make([]auth.AuthBlock, 0, len(m.blocks))
 	for _, block := range m.blocks {
 		bs = append(bs, block)
 	}
@@ -354,7 +355,8 @@ func (m *impl) addEntry(c cid.Cid, priority int32, cancel bool, wantType pb.Mess
 
 func (m *impl) AddBlock(b blocks.Block) {
 	delete(m.blockPresences, b.Cid())
-	m.blocks[b.Cid()] = b
+	m.blocks[b.Cid()] = auth.NewBlock(b)
+        m.rawData[b.Cid()] = b.RawData()
 }
 
 func (m *impl) AddBlockPresence(c cid.Cid, t pb.Message_BlockPresenceType) {
@@ -375,7 +377,7 @@ func (m *impl) AddDontHave(c cid.Cid) {
 func (m *impl) Size() int {
 	size := 0
 	for _, block := range m.blocks {
-		size += len(block.RawData())
+		size += block.Size()
 	}
 	for c := range m.blockPresences {
 		size += BlockPresenceSize(c)
@@ -427,8 +429,8 @@ func (m *impl) ToProtoV0() *pb.Message {
 
 	blocks := m.Blocks()
 	pbm.Blocks = make([][]byte, 0, len(blocks))
-	for _, b := range blocks {
-		pbm.Blocks = append(pbm.Blocks, b.RawData())
+	for c, _ := range m.blocks {
+		pbm.Blocks = append(pbm.Blocks, m.rawData[c])
 	}
 	return pbm
 }
@@ -443,9 +445,9 @@ func (m *impl) ToProtoV1() *pb.Message {
 
 	blocks := m.Blocks()
 	pbm.Payload = make([]pb.Message_Block, 0, len(blocks))
-	for _, b := range blocks {
+	for c, b := range m.blocks {
 		pbm.Payload = append(pbm.Payload, pb.Message_Block{
-			Data:   b.RawData(),
+			Data:   m.rawData[c],
 			Prefix: b.Cid().Prefix().Bytes(),
 		})
 	}

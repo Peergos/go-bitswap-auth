@@ -25,6 +25,7 @@ import (
 	bssession "github.com/peergos/go-bitswap-auth/internal/session"
 	bsmsg "github.com/peergos/go-bitswap-auth/message"
 	pb "github.com/peergos/go-bitswap-auth/message/pb"
+        "github.com/peergos/go-bitswap-auth/auth"
 	testinstance "github.com/peergos/go-bitswap-auth/testinstance"
 	tn "github.com/peergos/go-bitswap-auth/testnet"
 )
@@ -99,7 +100,7 @@ func TestGetBlockFromPeerAfterPeerAnnounces(t *testing.T) {
 	hasBlock := peers[0]
 	defer hasBlock.Exchange.Close()
 
-	if err := hasBlock.Exchange.HasBlock(block); err != nil {
+	if err := hasBlock.Exchange.HasBlock(auth.NewBlock(block)); err != nil {
 		t.Fatal(err)
 	}
 
@@ -135,7 +136,7 @@ func TestDoesNotProvideWhenConfiguredNotTo(t *testing.T) {
 	wantsBlock := ig.Next()
 	defer wantsBlock.Exchange.Close()
 
-	if err := hasBlock.Exchange.HasBlock(block); err != nil {
+	if err := hasBlock.Exchange.HasBlock(auth.NewBlock(block)); err != nil {
 		t.Fatal(err)
 	}
 
@@ -173,7 +174,7 @@ func TestUnwantedBlockNotAdded(t *testing.T) {
 	hasBlock := peers[0]
 	defer hasBlock.Exchange.Close()
 
-	if err := hasBlock.Exchange.HasBlock(block); err != nil {
+	if err := hasBlock.Exchange.HasBlock(auth.NewBlock(block)); err != nil {
 		t.Fatal(err)
 	}
 
@@ -323,7 +324,7 @@ func PerformDistributionTest(t *testing.T, numInstances, numBlocks int) {
 	first := instances[0]
 	for _, b := range blocks {
 		blkeys = append(blkeys, b.Cid())
-		err := first.Exchange.HasBlock(b)
+		err := first.Exchange.HasBlock(auth.NewBlock(b))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -402,7 +403,7 @@ func TestSendToWantingPeer(t *testing.T) {
 	}
 
 	// peerB announces to the network that he has block alpha
-	err = peerB.Exchange.HasBlock(alpha)
+	err = peerB.Exchange.HasBlock(auth.NewBlock(alpha))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -470,7 +471,7 @@ func TestBasicBitswap(t *testing.T) {
 	blocks := bg.Blocks(1)
 
 	// First peer has block
-	err := instances[0].Exchange.HasBlock(blocks[0])
+	err := instances[0].Exchange.HasBlock(auth.NewBlock(blocks[0]))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -573,7 +574,7 @@ func TestDoubleGet(t *testing.T) {
 		t.Fatal("expected channel to be closed")
 	}
 
-	err = instances[0].Exchange.HasBlock(blocks[0])
+	err = instances[0].Exchange.HasBlock(auth.NewBlock(blocks[0]))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -742,7 +743,7 @@ func TestBitswapLedgerOneWay(t *testing.T) {
 
 	instances := ig.Instances(2)
 	blocks := bg.Blocks(1)
-	err := instances[0].Exchange.HasBlock(blocks[0])
+	err := instances[0].Exchange.HasBlock(auth.NewBlock(blocks[0]))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -797,12 +798,12 @@ func TestBitswapLedgerTwoWay(t *testing.T) {
 
 	instances := ig.Instances(2)
 	blocks := bg.Blocks(2)
-	err := instances[0].Exchange.HasBlock(blocks[0])
+	err := instances[0].Exchange.HasBlock(auth.NewBlock(blocks[0]))
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	err = instances[1].Exchange.HasBlock(blocks[1])
+	err = instances[1].Exchange.HasBlock(auth.NewBlock(blocks[1]))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -954,7 +955,7 @@ func TestTracer(t *testing.T) {
 	bitswap.WithTracer(wiretap)(instances[0].Exchange)
 
 	// First peer has block
-	err := instances[0].Exchange.HasBlock(blocks[0])
+	err := instances[0].Exchange.HasBlock(auth.NewBlock(blocks[0]))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1038,7 +1039,7 @@ func TestTracer(t *testing.T) {
 	// After disabling WireTap, no new messages are logged
 	bitswap.WithTracer(nil)(instances[0].Exchange)
 
-	err = instances[0].Exchange.HasBlock(blocks[1])
+	err = instances[0].Exchange.HasBlock(auth.NewBlock(blocks[1]))
 	if err != nil {
 		t.Fatal(err)
 	}

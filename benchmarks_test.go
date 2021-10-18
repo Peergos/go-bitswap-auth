@@ -21,6 +21,7 @@ import (
 	delay "github.com/ipfs/go-ipfs-delay"
 	mockrouting "github.com/ipfs/go-ipfs-routing/mock"
 	peer "github.com/libp2p/go-libp2p-core/peer"
+	"github.com/peergos/go-bitswap-auth/auth"
 	bitswap "github.com/peergos/go-bitswap-auth"
 	bssession "github.com/peergos/go-bitswap-auth/internal/session"
 	bsnet "github.com/peergos/go-bitswap-auth/network"
@@ -448,9 +449,18 @@ func runDistribution(b *testing.B, instances []testinstance.Instance, blocks []b
 	// b.Logf("send/recv: %d / %d (dups: %d)", nst.MessagesSent, nst.MessagesRecvd, st.DupBlksReceived)
 }
 
+func wrapBlocks(blocks []blocks.Block) []auth.AuthBlock {
+        wrapped := make([]auth.AuthBlock, len(blocks))
+        for i,b := range blocks {
+            wrapped[i] = auth.NewBlock(b)
+        }
+        return wrapped
+}
+
 func allToAll(b *testing.B, provs []testinstance.Instance, blocks []blocks.Block) {
+        
 	for _, p := range provs {
-		if err := p.Blockstore().PutMany(blocks); err != nil {
+		if err := p.Blockstore().PutMany(wrapBlocks(blocks)); err != nil {
 			b.Fatal(err)
 		}
 	}
@@ -465,10 +475,10 @@ func overlap1(b *testing.B, provs []testinstance.Instance, blks []blocks.Block) 
 	bill := provs[0]
 	jeff := provs[1]
 
-	if err := bill.Blockstore().PutMany(blks[:75]); err != nil {
+	if err := bill.Blockstore().PutMany(wrapBlocks(blks[:75])); err != nil {
 		b.Fatal(err)
 	}
-	if err := jeff.Blockstore().PutMany(blks[25:]); err != nil {
+	if err := jeff.Blockstore().PutMany(wrapBlocks(blks[25:])); err != nil {
 		b.Fatal(err)
 	}
 }
@@ -486,12 +496,12 @@ func overlap2(b *testing.B, provs []testinstance.Instance, blks []blocks.Block) 
 		even := i%2 == 0
 		third := i%3 == 0
 		if third || even {
-			if err := bill.Blockstore().Put(blk); err != nil {
+			if err := bill.Blockstore().Put(auth.NewBlock(blk)); err != nil {
 				b.Fatal(err)
 			}
 		}
 		if third || !even {
-			if err := jeff.Blockstore().Put(blk); err != nil {
+			if err := jeff.Blockstore().Put(auth.NewBlock(blk)); err != nil {
 				b.Fatal(err)
 			}
 		}
@@ -503,7 +513,7 @@ func overlap2(b *testing.B, provs []testinstance.Instance, blks []blocks.Block) 
 // but we're mostly just testing performance of the sync algorithm
 func onePeerPerBlock(b *testing.B, provs []testinstance.Instance, blks []blocks.Block) {
 	for _, blk := range blks {
-		err := provs[rand.Intn(len(provs))].Blockstore().Put(blk)
+		err := provs[rand.Intn(len(provs))].Blockstore().Put(auth.NewBlock(blk))
 		if err != nil {
 			b.Fatal(err)
 		}

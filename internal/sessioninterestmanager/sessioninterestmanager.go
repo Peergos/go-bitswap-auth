@@ -3,9 +3,8 @@ package sessioninterestmanager
 import (
 	"sync"
 
-	blocks "github.com/ipfs/go-block-format"
-
 	cid "github.com/ipfs/go-cid"
+        "github.com/peergos/go-bitswap-auth/auth"
 )
 
 // SessionInterestManager records the CIDs that each session is interested in.
@@ -142,7 +141,7 @@ func (sim *SessionInterestManager) FilterSessionInterested(ses uint64, ksets ...
 
 // When bitswap receives blocks it calls SplitWantedUnwanted() to discard
 // unwanted blocks
-func (sim *SessionInterestManager) SplitWantedUnwanted(blks []blocks.Block) ([]blocks.Block, []blocks.Block) {
+func (sim *SessionInterestManager) SplitWantedUnwanted(blks []auth.AuthBlock) ([]auth.AuthBlock, []auth.AuthBlock) {
 	sim.lk.RLock()
 	defer sim.lk.RUnlock()
 
@@ -161,8 +160,8 @@ func (sim *SessionInterestManager) SplitWantedUnwanted(blks []blocks.Block) ([]b
 	}
 
 	// Separate the blocks into wanted and unwanted
-	wantedBlks := make([]blocks.Block, 0, len(blks))
-	notWantedBlks := make([]blocks.Block, 0)
+	wantedBlks := make([]auth.AuthBlock, 0, len(blks))
+	notWantedBlks := make([]auth.AuthBlock, 0)
 	for _, b := range blks {
 		if wantedKs.Has(b.Cid()) {
 			wantedBlks = append(wantedBlks, b)

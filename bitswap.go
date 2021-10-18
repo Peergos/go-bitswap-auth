@@ -423,15 +423,15 @@ func (bs *Bitswap) GetBlocks(ctx context.Context, keys []cid.Cid, auth []string)
 
 // HasBlock announces the existence of a block to this bitswap service. The
 // service will potentially notify its peers.
-func (bs *Bitswap) HasBlock(blk blocks.Block) error {
-	return bs.receiveBlocksFrom(context.Background(), "", []blocks.Block{blk}, nil, nil)
+func (bs *Bitswap) HasBlock(blk auth.AuthBlock) error {
+	return bs.receiveBlocksFrom(context.Background(), "", []auth.AuthBlock{blk}, nil, nil)
 }
 
 // TODO: Some of this stuff really only needs to be done when adding a block
 // from the user, not when receiving it from the network.
 // In case you run `git blame` on this comment, I'll save you some time: ask
 // @whyrusleeping, I don't know the answers you seek.
-func (bs *Bitswap) receiveBlocksFrom(ctx context.Context, from peer.ID, blks []blocks.Block, haves []cid.Cid, dontHaves []cid.Cid) error {
+func (bs *Bitswap) receiveBlocksFrom(ctx context.Context, from peer.ID, blks []auth.AuthBlock, haves []cid.Cid, dontHaves []cid.Cid) error {
 	select {
 	case <-bs.process.Closing():
 		return errors.New("bitswap is closed")
@@ -442,7 +442,7 @@ func (bs *Bitswap) receiveBlocksFrom(ctx context.Context, from peer.ID, blks []b
 
 	// If blocks came from the network
 	if from != "" {
-		var notWanted []blocks.Block
+		var notWanted []auth.AuthBlock
 		wanted, notWanted = bs.sim.SplitWantedUnwanted(blks)
 		for _, b := range notWanted {
 			log.Debugf("[recv] block not in wantlist; cid=%s, peer=%s", b.Cid(), from)
@@ -484,14 +484,16 @@ func (bs *Bitswap) receiveBlocksFrom(ctx context.Context, from peer.ID, blks []b
 	bs.sm.ReceiveFrom(ctx, from, allKs, haves, dontHaves)
 
 	// Send wanted blocks to decision engine
-	bs.engine.ReceiveFrom(from, wanted)
+	// N.B. ReceiveFrom is disabled because it bypasses auth
+	//bs.engine.ReceiveFrom(from, wanted)
 
 	// Publish the block to any Bitswap clients that had requested blocks.
 	// (the sessions use this pubsub mechanism to inform clients of incoming
 	// blocks)
-	for _, b := range wanted {
-		bs.notif.Publish(b)
-	}
+        // N.B. Notification is disabled because it bypasses auth
+	//for _, b := range wanted {
+	//	bs.notif.Publish(b)
+	//}
 
 	// If the reprovider is enabled, send wanted blocks to reprovider
 	if bs.provideEnabled {
@@ -552,7 +554,7 @@ func (bs *Bitswap) ReceiveMessage(ctx context.Context, p peer.ID, incoming bsmsg
 	}
 }
 
-func (bs *Bitswap) updateReceiveCounters(blocks []blocks.Block) {
+func (bs *Bitswap) updateReceiveCounters(blocks []auth.AuthBlock) {
 	// Check which blocks are in the datastore
 	// (Note: any errors from the blockstore are simply logged out in
 	// blockstoreHas())
@@ -565,7 +567,7 @@ func (bs *Bitswap) updateReceiveCounters(blocks []blocks.Block) {
 	for i, b := range blocks {
 		has := blocksHas[i]
 
-		blkLen := len(b.RawData())
+		blkLen := b.Size()
 		bs.allMetric.Observe(float64(blkLen))
 		if has {
 			bs.dupMetric.Observe(float64(blkLen))
@@ -582,13 +584,13 @@ func (bs *Bitswap) updateReceiveCounters(blocks []blocks.Block) {
 	}
 }
 
-func (bs *Bitswap) blockstoreHas(blks []blocks.Block) []bool {
+func (bs *Bitswap) blockstoreHas(blks []auth.AuthBlock) []bool {
 	res := make([]bool, len(blks))
 
 	wg := sync.WaitGroup{}
 	for i, block := range blks {
 		wg.Add(1)
-		go func(i int, b blocks.Block) {
+		go func(i int, b auth.AuthBlock) {
 			defer wg.Done()
 
 			has, err := bs.blockstore.Has(b.Cid())

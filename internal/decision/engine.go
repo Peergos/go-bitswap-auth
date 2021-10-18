@@ -769,7 +769,7 @@ func (e *Engine) MessageSent(p peer.ID, m bsmsg.BitSwapMessage) {
 
 	// Remove sent blocks from the want list for the peer
 	for _, block := range m.Blocks() {
-		e.scoreLedger.AddToSentBytes(l.Partner, len(block.RawData()))
+		e.scoreLedger.AddToSentBytes(l.Partner, block.Size())
 		l.wantList.RemoveType(block.Cid(), pb.Message_Wantlist_Block)
 	}
 

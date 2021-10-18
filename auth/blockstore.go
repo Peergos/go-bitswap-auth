@@ -21,11 +21,11 @@ type AuthBlockstore interface {
 	GetSize(cid.Cid) (int, error)
 
 	// Put puts a given block to the underlying datastore
-	Put(blocks.Block) error
+	Put(AuthBlock) error
 
 	// PutMany puts a slice of blocks at the same time using batching
 	// capabilities of the underlying datastore whenever possible.
-	PutMany([]blocks.Block) error
+	PutMany([]AuthBlock) error
 
 	// AllKeysChan returns a channel from which
 	// the CIDs in the Blockstore can be read. It should respect
@@ -35,6 +35,26 @@ type AuthBlockstore interface {
 	// HashOnRead specifies if every read block should be
 	// rehashed to make sure it matches its CID.
 	HashOnRead(enabled bool)
+}
+
+type AuthBlock struct {
+     block blocks.Block
+}
+
+func (a AuthBlock) Cid() cid.Cid {
+     return a.block.Cid()
+}
+
+func (a AuthBlock) Size() int {
+     return len(a.block.RawData())
+}
+
+func (a AuthBlock) Loggable() map[string]interface {} {
+     return map[string]interface {} {}
+}
+
+func NewBlock(block blocks.Block) AuthBlock {
+     return AuthBlock{block:block}
 }
 
 type AuthedBlockstore struct {
@@ -66,12 +86,16 @@ func (bs *AuthedBlockstore) GetSize(c cid.Cid) (int, error) {
 	return bs.source.GetSize(c)
 }
 
-func (bs *AuthedBlockstore) Put(b blocks.Block) error {
-	return bs.source.Put(b)
+func (bs *AuthedBlockstore) Put(b AuthBlock) error {
+	return bs.source.Put(b.block)
 }
 
-func (bs *AuthedBlockstore) PutMany(blocks []blocks.Block) error {
-	return bs.source.PutMany(blocks)
+func (bs *AuthedBlockstore) PutMany(authblocks []AuthBlock) error {
+        unwrapped := make([]blocks.Block, len(authblocks))
+        for i,b := range authblocks {
+            unwrapped[i] = b.block
+        }
+	return bs.source.PutMany(unwrapped)
 }
 
 func (bs *AuthedBlockstore) AllKeysChan(ctx context.Context) (<-chan cid.Cid, error) {

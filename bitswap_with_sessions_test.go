@@ -13,7 +13,8 @@ import (
 	mockrouting "github.com/ipfs/go-ipfs-routing/mock"
 	peer "github.com/libp2p/go-libp2p-core/peer"
 	tu "github.com/libp2p/go-libp2p-testing/etc"
-	bitswap "github.com/peergos/go-bitswap-auth"
+	"github.com/peergos/go-bitswap-auth/auth"
+        bitswap "github.com/peergos/go-bitswap-auth"
 	bssession "github.com/peergos/go-bitswap-auth/internal/session"
 	testinstance "github.com/peergos/go-bitswap-auth/testinstance"
 	tn "github.com/peergos/go-bitswap-auth/testnet"
@@ -38,7 +39,7 @@ func TestBasicSessions(t *testing.T) {
 	b := inst[1]
 
 	// Add a block to Peer B
-	if err := b.Blockstore().Put(block); err != nil {
+	if err := b.Blockstore().Put(auth.NewBlock(block)); err != nil {
 		t.Fatal(err)
 	}
 
@@ -89,7 +90,7 @@ func TestSessionBetweenPeers(t *testing.T) {
 
 	// Add 101 blocks to Peer A
 	blks := bgen.Blocks(101)
-	if err := inst[0].Blockstore().PutMany(blks); err != nil {
+	if err := inst[0].Blockstore().PutMany(wrapBlocks(blks)); err != nil {
 		t.Fatal(err)
 	}
 
@@ -153,7 +154,7 @@ func TestSessionSplitFetch(t *testing.T) {
 	// Add 10 distinct blocks to each of 10 peers
 	blks := bgen.Blocks(100)
 	for i := 0; i < 10; i++ {
-		if err := inst[i].Blockstore().PutMany(blks[i*10 : (i+1)*10]); err != nil {
+		if err := inst[i].Blockstore().PutMany(wrapBlocks(blks[i*10 : (i+1)*10])); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -200,7 +201,7 @@ func TestFetchNotConnected(t *testing.T) {
 	// Provide 10 blocks on Peer A
 	blks := bgen.Blocks(10)
 	for _, block := range blks {
-		if err := other.Exchange.HasBlock(block); err != nil {
+		if err := other.Exchange.HasBlock(auth.NewBlock(block)); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -259,7 +260,7 @@ func TestFetchAfterDisconnect(t *testing.T) {
 
 	firstBlks := blks[:5]
 	for _, block := range firstBlks {
-		if err := peerA.Exchange.HasBlock(block); err != nil {
+		if err := peerA.Exchange.HasBlock(auth.NewBlock(block)); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -295,7 +296,7 @@ func TestFetchAfterDisconnect(t *testing.T) {
 	// Provide remaining blocks
 	lastBlks := blks[5:]
 	for _, block := range lastBlks {
-		if err := peerA.Exchange.HasBlock(block); err != nil {
+		if err := peerA.Exchange.HasBlock(auth.NewBlock(block)); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -353,7 +354,7 @@ func TestInterestCacheOverflow(t *testing.T) {
 	// wait to ensure that all the above cids were added to the sessions cache
 	time.Sleep(time.Millisecond * 50)
 
-	if err := b.Exchange.HasBlock(blks[0]); err != nil {
+	if err := b.Exchange.HasBlock(auth.NewBlock(blks[0])); err != nil {
 		t.Fatal(err)
 	}
 
@@ -403,7 +404,7 @@ func TestPutAfterSessionCacheEvict(t *testing.T) {
 	// wait to ensure that all the above cids were added to the sessions cache
 	time.Sleep(time.Millisecond * 50)
 
-	if err := a.Exchange.HasBlock(blks[17]); err != nil {
+	if err := a.Exchange.HasBlock(auth.NewBlock(blks[17])); err != nil {
 		t.Fatal(err)
 	}
 
@@ -448,7 +449,7 @@ func TestMultipleSessions(t *testing.T) {
 	}
 
 	time.Sleep(time.Millisecond * 10)
-	if err := b.Exchange.HasBlock(blk); err != nil {
+	if err := b.Exchange.HasBlock(auth.NewBlock(blk)); err != nil {
 		t.Fatal(err)
 	}
 
