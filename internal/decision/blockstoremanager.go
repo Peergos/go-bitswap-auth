@@ -89,7 +89,7 @@ func (bsm *blockstoreManager) getBlockSizes(ctx context.Context, ks []cid.Cid, a
 	return res, bsm.jobPerKey(ctx, ks, auth, remote, func(c cid.Cid, remote peer.ID, auth string) {
 		size, err := bsm.bs.GetSize(c)
 		if err != nil {
-			if err != bstore.ErrNotFound {
+			if err != bstore.ErrNotFound && err != auth.ErrUnauthorised {
 				// Note: this isn't a fatal error. We shouldn't abort the request
 				log.Errorf("blockstore.GetSize(%s) error: %s", c, err)
 			}
@@ -101,17 +101,17 @@ func (bsm *blockstoreManager) getBlockSizes(ctx context.Context, ks []cid.Cid, a
 	})
 }
 
-func (bsm *blockstoreManager) getBlocks(ctx context.Context, ks []cid.Cid, auth []string, remote peer.ID) (map[cid.Cid]blocks.Block, error) {
+func (bsm *blockstoreManager) getBlocks(ctx context.Context, ks []cid.Cid, auths []string, remote peer.ID) (map[cid.Cid]blocks.Block, error) {
 	res := make(map[cid.Cid]blocks.Block)
 	if len(ks) == 0 {
 		return res, nil
 	}
 
 	var lk sync.Mutex
-	return res, bsm.jobPerKey(ctx, ks, auth, remote, func(c cid.Cid, remote peer.ID, auth string) {
-		blk, err := bsm.bs.Get(c, remote, auth)
+	return res, bsm.jobPerKey(ctx, ks, auths, remote, func(c cid.Cid, remote peer.ID, a string) {
+		blk, err := bsm.bs.Get(c, remote, a)
 		if err != nil {
-			if err != bstore.ErrNotFound {
+			if err != bstore.ErrNotFound && err != auth.ErrUnauthorised {
 				// Note: this isn't a fatal error. We shouldn't abort the request
 				log.Errorf("blockstore.Get(%s) error: %s", c, err)
 			}

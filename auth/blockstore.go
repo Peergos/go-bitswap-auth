@@ -10,6 +10,8 @@ import (
 	peer "github.com/libp2p/go-libp2p-core/peer"
 )
 
+var ErrUnauthorised = errors.New("Unauthorised")
+
 type AuthBlockstore interface {
 	DeleteBlock(cid.Cid) error
 	Has(cid.Cid) (bool, error)
@@ -49,7 +51,7 @@ func (bs *AuthedBlockstore) Get(c cid.Cid, remote peer.ID, auth string) (blocks.
 	if bs.allow(c, remote, auth) {
 		return bs.source.Get(c)
 	}
-	return nil, errors.New("Unauthorised")
+	return nil, ErrUnauthorised
 }
 
 func (bs *AuthedBlockstore) DeleteBlock(c cid.Cid) error {
