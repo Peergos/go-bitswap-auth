@@ -79,14 +79,14 @@ func (bsm *blockstoreManager) addJob(ctx context.Context, job func()) error {
 	}
 }
 
-func (bsm *blockstoreManager) getBlockSizes(ctx context.Context, ks []cid.Cid, auth []string, remote peer.ID) (map[cid.Cid]int, error) {
+func (bsm *blockstoreManager) getBlockSizes(ctx context.Context, ks []cid.Cid, auths []string, remote peer.ID) (map[cid.Cid]int, error) {
 	res := make(map[cid.Cid]int)
 	if len(ks) == 0 {
 		return res, nil
 	}
 
 	var lk sync.Mutex
-	return res, bsm.jobPerKey(ctx, ks, auth, remote, func(c cid.Cid, remote peer.ID, auth string) {
+	return res, bsm.jobPerKey(ctx, ks, auths, remote, func(c cid.Cid, remote peer.ID, a string) {
 		size, err := bsm.bs.GetSize(c)
 		if err != nil {
 			if err != bstore.ErrNotFound && err != auth.ErrUnauthorised {
