@@ -749,7 +749,7 @@ func (mq *MessageQueue) extractOutgoingMessage(supportsHave bool) (bsmsg.BitSwap
 	}
 
 	for _, e := range peerEntries {
-		msgSize += mq.msg.AddEntry(e.Cid, e.Priority, e.WantType, true)
+		msgSize += mq.msg.AddEntry(e.Cid, e.Priority, e.WantType, true, e.Auth)
 		sentPeerEntries++
 
 		if msgSize >= mq.maxMessageSize {
@@ -773,7 +773,7 @@ func (mq *MessageQueue) extractOutgoingMessage(supportsHave bool) (bsmsg.BitSwap
 			wantType = pb.Message_Wantlist_Block
 		}
 
-		msgSize += mq.msg.AddEntry(e.Cid, e.Priority, wantType, false)
+		msgSize += mq.msg.AddEntry(e.Cid, e.Priority, wantType, false, e.Auth)
 		sentBcstEntries++
 
 		if msgSize >= mq.maxMessageSize {
