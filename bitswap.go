@@ -490,10 +490,9 @@ func (bs *Bitswap) receiveBlocksFrom(ctx context.Context, from peer.ID, blks []a
 	// Publish the block to any Bitswap clients that had requested blocks.
 	// (the sessions use this pubsub mechanism to inform clients of incoming
 	// blocks)
-        // N.B. Notification is disabled because it bypasses auth
-	//for _, b := range wanted {
-	//	bs.notif.Publish(b)
-	//}
+	for _, b := range wanted {
+		bs.notif.Publish(b)
+	}
 
 	// If the reprovider is enabled, send wanted blocks to reprovider
 	if bs.provideEnabled {

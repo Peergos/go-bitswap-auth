@@ -47,15 +47,8 @@ func TestSimpleBlockExchangeWithAuth(t *testing.T) {
 	} else if my_block.Cid() != block_from_auth_blockstore.Cid() {
 		t.Fatal("expected to retrieve the same block I stored")
 	}
-        
-        fmt.Println("This is hanging...")
-	//test that I only receive a block from a peer when I provide the correct auth string
-	_, err = my_instances[1].Exchange.GetBlock(context.Background(), my_block.Cid(), invalid_auth)
-	if err == nil {
-		t.Fatal("Peer released block upon receiving request containing an invalid auth string!")
-	}
-        fmt.Println("escaped hang!")
-        
+
+	fmt.Println("This is hanging...")
 	received_block, err := my_instances[1].Exchange.GetBlock(context.Background(), my_block.Cid(), valid_auth)
 	if err != nil {
 		t.Fatal(err)
@@ -63,4 +56,12 @@ func TestSimpleBlockExchangeWithAuth(t *testing.T) {
 		t.Fatal("expected to receive a block with the same CID that I requested")
 	}
 	fmt.Println("received_block=", string(received_block.RawData()[:]))
+
+	fmt.Println("This is also hanging...")
+	//test that I only receive a block from a peer when I provide the correct auth string
+	_, err = my_instances[1].Exchange.GetBlock(context.Background(), my_block.Cid(), invalid_auth)
+	if err == nil {
+		t.Fatal("Peer released block upon receiving request containing an invalid auth string!")
+	}
+	fmt.Println("escaped hang!")
 }

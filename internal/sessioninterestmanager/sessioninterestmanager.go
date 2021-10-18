@@ -4,7 +4,7 @@ import (
 	"sync"
 
 	cid "github.com/ipfs/go-cid"
-        "github.com/peergos/go-bitswap-auth/auth"
+	"github.com/peergos/go-bitswap-auth/auth"
 )
 
 // SessionInterestManager records the CIDs that each session is interested in.

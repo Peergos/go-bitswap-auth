@@ -38,23 +38,23 @@ type AuthBlockstore interface {
 }
 
 type AuthBlock struct {
-     block blocks.Block
+	block blocks.Block
 }
 
 func (a AuthBlock) Cid() cid.Cid {
-     return a.block.Cid()
+	return a.block.Cid()
 }
 
 func (a AuthBlock) Size() int {
-     return len(a.block.RawData())
+	return len(a.block.RawData())
 }
 
-func (a AuthBlock) Loggable() map[string]interface {} {
-     return map[string]interface {} {}
+func (a AuthBlock) Loggable() map[string]interface{} {
+	return map[string]interface{}{}
 }
 
 func NewBlock(block blocks.Block) AuthBlock {
-     return AuthBlock{block:block}
+	return AuthBlock{block: block}
 }
 
 type AuthedBlockstore struct {
@@ -91,10 +91,10 @@ func (bs *AuthedBlockstore) Put(b AuthBlock) error {
 }
 
 func (bs *AuthedBlockstore) PutMany(authblocks []AuthBlock) error {
-        unwrapped := make([]blocks.Block, len(authblocks))
-        for i,b := range authblocks {
-            unwrapped[i] = b.block
-        }
+	unwrapped := make([]blocks.Block, len(authblocks))
+	for i, b := range authblocks {
+		unwrapped[i] = b.block
+	}
 	return bs.source.PutMany(unwrapped)
 }
 

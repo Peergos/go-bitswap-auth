@@ -7,6 +7,7 @@ import (
 	pubsub "github.com/cskr/pubsub"
 	blocks "github.com/ipfs/go-block-format"
 	cid "github.com/ipfs/go-cid"
+	"github.com/peergos/go-bitswap-auth/auth"
 )
 
 const bufferSize = 16
@@ -15,7 +16,7 @@ const bufferSize = 16
 // for cids. It's used internally by bitswap to decouple receiving blocks
 // and actually providing them back to the GetBlocks caller.
 type PubSub interface {
-	Publish(block blocks.Block)
+	Publish(block auth.AuthBlock)
 	Subscribe(ctx context.Context, keys ...cid.Cid) <-chan blocks.Block
 	Shutdown()
 }
@@ -35,7 +36,7 @@ type impl struct {
 	closed chan struct{}
 }
 
-func (ps *impl) Publish(block blocks.Block) {
+func (ps *impl) Publish(block auth.AuthBlock) {
 	ps.lk.RLock()
 	defer ps.lk.RUnlock()
 	select {

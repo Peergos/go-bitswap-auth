@@ -92,8 +92,9 @@ const (
 )
 
 type op struct {
-	op   opType
-	keys []cid.Cid
+	op    opType
+	keys  []cid.Cid
+	auths []string
 }
 
 // Session holds state for an individual bitswap transfer operation.
@@ -235,13 +236,13 @@ func (s *Session) GetBlock(parent context.Context, k cid.Cid, auth string) (bloc
 // GetBlocks fetches a set of blocks within the context of this session and
 // returns a channel that found blocks will be returned on. No order is
 // guaranteed on the returned blocks.
-func (s *Session) GetBlocks(ctx context.Context, keys []cid.Cid, auth []string) (<-chan blocks.Block, error) {
+func (s *Session) GetBlocks(ctx context.Context, keys []cid.Cid, auths []string) (<-chan blocks.Block, error) {
 	ctx = logging.ContextWithLoggable(ctx, s.uuid)
 
-	return bsgetter.AsyncGetBlocks(ctx, s.ctx, keys, s.notif,
-		func(ctx context.Context, keys []cid.Cid) {
+	return bsgetter.AsyncGetBlocks(ctx, s.ctx, keys, auths, s.notif,
+		func(ctx context.Context, keys []cid.Cid, auths []string) {
 			select {
-			case s.incoming <- op{op: opWant, keys: keys}:
+			case s.incoming <- op{op: opWant, keys: keys, auths: auths}:
 			case <-ctx.Done():
 			case <-s.ctx.Done():
 			}

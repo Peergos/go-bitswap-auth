@@ -21,8 +21,8 @@ import (
 	delay "github.com/ipfs/go-ipfs-delay"
 	mockrouting "github.com/ipfs/go-ipfs-routing/mock"
 	peer "github.com/libp2p/go-libp2p-core/peer"
-	"github.com/peergos/go-bitswap-auth/auth"
 	bitswap "github.com/peergos/go-bitswap-auth"
+	"github.com/peergos/go-bitswap-auth/auth"
 	bssession "github.com/peergos/go-bitswap-auth/internal/session"
 	bsnet "github.com/peergos/go-bitswap-auth/network"
 	testinstance "github.com/peergos/go-bitswap-auth/testinstance"
@@ -450,15 +450,15 @@ func runDistribution(b *testing.B, instances []testinstance.Instance, blocks []b
 }
 
 func wrapBlocks(blocks []blocks.Block) []auth.AuthBlock {
-        wrapped := make([]auth.AuthBlock, len(blocks))
-        for i,b := range blocks {
-            wrapped[i] = auth.NewBlock(b)
-        }
-        return wrapped
+	wrapped := make([]auth.AuthBlock, len(blocks))
+	for i, b := range blocks {
+		wrapped[i] = auth.NewBlock(b)
+	}
+	return wrapped
 }
 
 func allToAll(b *testing.B, provs []testinstance.Instance, blocks []blocks.Block) {
-        
+
 	for _, p := range provs {
 		if err := p.Blockstore().PutMany(wrapBlocks(blocks)); err != nil {
 			b.Fatal(err)

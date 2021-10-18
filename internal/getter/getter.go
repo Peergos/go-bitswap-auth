@@ -58,12 +58,12 @@ func SyncGetBlock(p context.Context, k cid.Cid, auth string, gb GetBlocksFunc) (
 }
 
 // WantFunc is any function that can express a want for set of blocks.
-type WantFunc func(context.Context, []cid.Cid)
+type WantFunc func(context.Context, []cid.Cid, []string)
 
 // AsyncGetBlocks take a set of block cids, a pubsub channel for incoming
 // blocks, a want function, and a close function, and returns a channel of
 // incoming blocks.
-func AsyncGetBlocks(ctx context.Context, sessctx context.Context, keys []cid.Cid, notif notifications.PubSub,
+func AsyncGetBlocks(ctx context.Context, sessctx context.Context, keys []cid.Cid, auths []string, notif notifications.PubSub,
 	want WantFunc, cwants func([]cid.Cid)) (<-chan blocks.Block, error) {
 
 	// If there are no keys supplied, just return a closed channel
@@ -82,7 +82,7 @@ func AsyncGetBlocks(ctx context.Context, sessctx context.Context, keys []cid.Cid
 	}
 
 	// Send the want request for the keys to the network
-	want(ctx, keys)
+	want(ctx, keys, auths)
 
 	out := make(chan blocks.Block)
 	go handleIncoming(ctx, sessctx, remaining, promise, out, cwants)

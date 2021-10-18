@@ -20,12 +20,12 @@ import (
 	travis "github.com/libp2p/go-libp2p-testing/ci/travis"
 	tu "github.com/libp2p/go-libp2p-testing/etc"
 	bitswap "github.com/peergos/go-bitswap-auth"
+	"github.com/peergos/go-bitswap-auth/auth"
 	deciface "github.com/peergos/go-bitswap-auth/decision"
 	decision "github.com/peergos/go-bitswap-auth/internal/decision"
 	bssession "github.com/peergos/go-bitswap-auth/internal/session"
 	bsmsg "github.com/peergos/go-bitswap-auth/message"
 	pb "github.com/peergos/go-bitswap-auth/message/pb"
-        "github.com/peergos/go-bitswap-auth/auth"
 	testinstance "github.com/peergos/go-bitswap-auth/testinstance"
 	tn "github.com/peergos/go-bitswap-auth/testnet"
 )

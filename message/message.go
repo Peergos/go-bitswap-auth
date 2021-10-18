@@ -10,11 +10,11 @@ import (
 
 	blocks "github.com/ipfs/go-block-format"
 	cid "github.com/ipfs/go-cid"
-	pool "github.com/libp2p/go-buffer-pool"
-	msgio "github.com/libp2p/go-msgio"
-        "github.com/peergos/go-bitswap-auth/auth"
 	u "github.com/ipfs/go-ipfs-util"
+	pool "github.com/libp2p/go-buffer-pool"
 	"github.com/libp2p/go-libp2p-core/network"
+	msgio "github.com/libp2p/go-msgio"
+	"github.com/peergos/go-bitswap-auth/auth"
 )
 
 // BitSwapMessage is the basic interface for interacting building, encoding,
@@ -343,7 +343,7 @@ func (m *impl) addEntry(c cid.Cid, priority int32, cancel bool, wantType pb.Mess
 			Cid:      c,
 			Priority: priority,
 			WantType: wantType,
-                        Auth: auth,
+			Auth:     auth,
 		},
 		SendDontHave: sendDontHave,
 		Cancel:       cancel,
@@ -356,7 +356,7 @@ func (m *impl) addEntry(c cid.Cid, priority int32, cancel bool, wantType pb.Mess
 func (m *impl) AddBlock(b blocks.Block) {
 	delete(m.blockPresences, b.Cid())
 	m.blocks[b.Cid()] = auth.NewBlock(b)
-        m.rawData[b.Cid()] = b.RawData()
+	m.rawData[b.Cid()] = b.RawData()
 }
 
 func (m *impl) AddBlockPresence(c cid.Cid, t pb.Message_BlockPresenceType) {
