@@ -7,8 +7,8 @@ import (
 
 	cid "github.com/ipfs/go-cid"
 	delay "github.com/ipfs/go-ipfs-delay"
-
 	peer "github.com/libp2p/go-libp2p-core/peer"
+	"github.com/peergos/go-bitswap-auth/auth"
 	bsbpm "github.com/peergos/go-bitswap-auth/internal/blockpresencemanager"
 	notifications "github.com/peergos/go-bitswap-auth/internal/notifications"
 	bssession "github.com/peergos/go-bitswap-auth/internal/session"
@@ -170,14 +170,14 @@ func (sm *SessionManager) ReceiveFrom(ctx context.Context, p peer.ID, blks []cid
 
 // CancelSessionWants is called when a session cancels wants because a call to
 // GetBlocks() is cancelled
-func (sm *SessionManager) CancelSessionWants(sesid uint64, wants []cid.Cid) {
+func (sm *SessionManager) CancelSessionWants(sesid uint64, wants []auth.Want) {
 	// Remove session's interest in the given blocks - returns the keys that no
 	// session is interested in anymore.
 	cancelKs := sm.sessionInterestManager.RemoveSessionInterested(sesid, wants)
 	sm.cancelWants(cancelKs)
 }
 
-func (sm *SessionManager) cancelWants(wants []cid.Cid) {
+func (sm *SessionManager) cancelWants(wants []auth.Want) {
 	// Free up block presence tracking for keys that no session is interested
 	// in anymore
 	sm.blockPresenceManager.RemoveKeys(wants)

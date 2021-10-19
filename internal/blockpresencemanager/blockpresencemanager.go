@@ -5,6 +5,7 @@ import (
 
 	cid "github.com/ipfs/go-cid"
 	peer "github.com/libp2p/go-libp2p-core/peer"
+	"github.com/peergos/go-bitswap-auth/auth"
 )
 
 // BlockPresenceManager keeps track of which peers have indicated that they
@@ -71,14 +72,14 @@ func (bpm *BlockPresenceManager) PeerDoesNotHaveBlock(p peer.ID, c cid.Cid) bool
 // for a key.
 // This allows us to know if we've exhausted all possibilities of finding
 // the key with the peers we know about.
-func (bpm *BlockPresenceManager) AllPeersDoNotHaveBlock(peers []peer.ID, ks []cid.Cid) []cid.Cid {
+func (bpm *BlockPresenceManager) AllPeersDoNotHaveBlock(peers []peer.ID, ws []auth.Want) []auth.Want {
 	bpm.RLock()
 	defer bpm.RUnlock()
 
-	var res []cid.Cid
-	for _, c := range ks {
-		if bpm.allDontHave(peers, c) {
-			res = append(res, c)
+	var res []auth.Want
+	for _, w := range ws {
+		if bpm.allDontHave(peers, w.Cid) {
+			res = append(res, w)
 		}
 	}
 	return res
@@ -101,12 +102,12 @@ func (bpm *BlockPresenceManager) allDontHave(peers []peer.ID, c cid.Cid) bool {
 }
 
 // RemoveKeys cleans up the given keys from the block presence map
-func (bpm *BlockPresenceManager) RemoveKeys(ks []cid.Cid) {
+func (bpm *BlockPresenceManager) RemoveKeys(ws []auth.Want) {
 	bpm.Lock()
 	defer bpm.Unlock()
 
-	for _, c := range ks {
-		delete(bpm.presence, c)
+	for _, w := range ws {
+		delete(bpm.presence, w.Cid)
 	}
 }
 

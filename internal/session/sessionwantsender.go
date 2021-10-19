@@ -7,6 +7,7 @@ import (
 
 	cid "github.com/ipfs/go-cid"
 	peer "github.com/libp2p/go-libp2p-core/peer"
+	"github.com/peergos/go-bitswap-auth/auth"
 )
 
 const (
@@ -33,7 +34,7 @@ const (
 // SessionWantsCanceller provides a method to cancel wants
 type SessionWantsCanceller interface {
 	// Cancel wants for this session
-	CancelSessionWants(sid uint64, wants []cid.Cid)
+	CancelSessionWants(sid uint64, wants []auth.Want)
 }
 
 // update encapsulates a message received by the session
@@ -58,17 +59,17 @@ type peerAvailability struct {
 // or a change in the connect status of a peer
 type change struct {
 	// new wants requested
-	add []cid.Cid
+	add []auth.Want
 	// wants cancelled
-	cancel []cid.Cid
+	cancel []auth.Want
 	// new message received by session (blocks / HAVEs / DONT_HAVEs)
 	update update
 	// peer has connected / disconnected
 	availability peerAvailability
 }
 
-type onSendFn func(to peer.ID, wantBlocks []cid.Cid, wantHaves []cid.Cid)
-type onPeersExhaustedFn func([]cid.Cid)
+type onSendFn func(to peer.ID, wantBlocks []auth.Want, wantHaves []auth.Want)
+type onPeersExhaustedFn func([]auth.Want)
 
 //
 // sessionWantSender is responsible for sending want-have and want-block to
@@ -91,7 +92,9 @@ type sessionWantSender struct {
 	// A channel that collects incoming changes (events)
 	changes chan change
 	// Information about each want indexed by CID
-	wants map[cid.Cid]*wantInfo
+	wants map[auth.Want]*wantInfo
+	// there may be multiple wants for the same cid, but some may be unauthorised
+	wantDups map[cid.Cid][]auth.Want
 	// Keeps track of how many consecutive DONT_HAVEs a peer has sent
 	peerConsecutiveDontHaves map[peer.ID]int
 	// Tracks which peers we have send want-block to
@@ -122,7 +125,8 @@ func newSessionWantSender(sid uint64, pm PeerManager, spm SessionPeerManager, ca
 		closed:                   make(chan struct{}),
 		sessionID:                sid,
 		changes:                  make(chan change, changesBufferSize),
-		wants:                    make(map[cid.Cid]*wantInfo),
+		wants:                    make(map[auth.Want]*wantInfo),
+		wantDups:                 make(map[cid.Cid][]auth.Want),
 		peerConsecutiveDontHaves: make(map[peer.ID]int),
 		swbt:                     newSentWantBlocksTracker(),
 		peerRspTrkr:              newPeerResponseTracker(),
@@ -143,19 +147,19 @@ func (sws *sessionWantSender) ID() uint64 {
 }
 
 // Add is called when new wants are added to the session
-func (sws *sessionWantSender) Add(ks []cid.Cid) {
-	if len(ks) == 0 {
+func (sws *sessionWantSender) Add(ws []auth.Want) {
+	if len(ws) == 0 {
 		return
 	}
-	sws.addChange(change{add: ks})
+	sws.addChange(change{add: ws})
 }
 
 // Cancel is called when a request is cancelled
-func (sws *sessionWantSender) Cancel(ks []cid.Cid) {
-	if len(ks) == 0 {
+func (sws *sessionWantSender) Cancel(ws []auth.Want) {
+	if len(ws) == 0 {
 		return
 	}
-	sws.addChange(change{cancel: ks})
+	sws.addChange(change{cancel: ws})
 }
 
 // Update is called when the session receives a message with incoming blocks
@@ -252,7 +256,7 @@ func (sws *sessionWantSender) onChange(changes []change) {
 
 	// Apply each change
 	availability := make(map[peer.ID]bool, len(changes))
-	cancels := make([]cid.Cid, 0)
+	cancels := make([]auth.Want, 0)
 	var updates []update
 	for _, chng := range changes {
 		// Initialize info for new wants
@@ -343,30 +347,35 @@ func (sws *sessionWantSender) processAvailability(availability map[peer.ID]bool)
 }
 
 // trackWant creates a new entry in the map of CID -> want info
-func (sws *sessionWantSender) trackWant(c cid.Cid) {
-	if _, ok := sws.wants[c]; ok {
+func (sws *sessionWantSender) trackWant(w auth.Want) {
+	if _, ok := sws.wants[w]; ok {
 		return
 	}
 
 	// Create the want info
 	wi := newWantInfo(sws.peerRspTrkr)
-	sws.wants[c] = wi
+	sws.wants[w] = wi
+	if len(sws.wantDups[w.Cid]) == 0 {
+		sws.wantDups[w.Cid] = []auth.Want{w}
+	} else {
+		sws.wantDups[w.Cid] = append(sws.wantDups[w.Cid], w)
+	}
 
 	// For each available peer, register any information we know about
 	// whether the peer has the block
 	for _, p := range sws.spm.Peers() {
-		sws.updateWantBlockPresence(c, p)
+		sws.updateWantBlockPresence(w, p)
 	}
 }
 
 // untrackWant removes an entry from the map of CID -> want info
-func (sws *sessionWantSender) untrackWant(c cid.Cid) {
-	delete(sws.wants, c)
+func (sws *sessionWantSender) untrackWant(w auth.Want) {
+	delete(sws.wants, w)
 }
 
 // processUpdates processes incoming blocks and HAVE / DONT_HAVEs.
 // It returns all DONT_HAVEs.
-func (sws *sessionWantSender) processUpdates(updates []update) []cid.Cid {
+func (sws *sessionWantSender) processUpdates(updates []update) []auth.Want {
 	// Process received blocks keys
 	blkCids := cid.NewSet()
 	for _, upd := range updates {
@@ -374,7 +383,7 @@ func (sws *sessionWantSender) processUpdates(updates []update) []cid.Cid {
 			blkCids.Add(c)
 
 			// Remove the want
-			removed := sws.removeWant(c)
+			removed := sws.removeWant(c, upd.from)
 			if removed != nil {
 				// Inform the peer tracker that this peer was the first to send
 				// us the block
@@ -390,7 +399,7 @@ func (sws *sessionWantSender) processUpdates(updates []update) []cid.Cid {
 	}
 
 	// Process received DONT_HAVEs
-	dontHaves := cid.NewSet()
+	dontHaves := []auth.Want{}
 	prunePeers := make(map[peer.ID]struct{})
 	for _, upd := range updates {
 		for _, c := range upd.dontHaves {
@@ -407,18 +416,19 @@ func (sws *sessionWantSender) processUpdates(updates []update) []cid.Cid {
 				continue
 			}
 
-			dontHaves.Add(c)
-
 			// Update the block presence for the peer
-			sws.updateWantBlockPresence(c, upd.from)
+			for _, w := range sws.wantDups[c] {
+				dontHaves = append(dontHaves, w)
+				sws.updateWantBlockPresence(w, upd.from)
 
-			// Check if the DONT_HAVE is in response to a want-block
-			// (could also be in response to want-have)
-			if sws.swbt.haveSentWantBlockTo(upd.from, c) {
-				// If we were waiting for a response from this peer, clear
-				// sentTo so that we can send the want to another peer
-				if sentTo, ok := sws.getWantSentTo(c); ok && sentTo == upd.from {
-					sws.setWantSentTo(c, "")
+				// Check if the DONT_HAVE is in response to a want-block
+				// (could also be in response to want-have)
+				if sws.swbt.haveSentWantBlockTo(upd.from, w) {
+					// If we were waiting for a response from this peer, clear
+					// sentTo so that we can send the want to another peer
+					if sentTo, ok := sws.getWantSentTo(w); ok && sentTo == upd.from {
+						sws.setWantSentTo(w, "")
+					}
 				}
 			}
 		}
@@ -430,7 +440,9 @@ func (sws *sessionWantSender) processUpdates(updates []update) []cid.Cid {
 			// If we haven't already received a block for the want
 			if !blkCids.Has(c) {
 				// Update the block presence for the peer
-				sws.updateWantBlockPresence(c, upd.from)
+				for _, w := range sws.wantDups[c] {
+					sws.updateWantBlockPresence(w, upd.from)
+				}
 			}
 
 			// Clear the consecutive DONT_HAVE count for the peer
@@ -445,7 +457,7 @@ func (sws *sessionWantSender) processUpdates(updates []update) []cid.Cid {
 		// Before removing the peer from the session, check if the peer
 		// sent us a HAVE for a block that we want
 		for c := range sws.wants {
-			if sws.bpm.PeerHasBlock(p, c) {
+			if sws.bpm.PeerHasBlock(p, c.Cid) {
 				delete(prunePeers, p)
 				break
 			}
@@ -461,12 +473,12 @@ func (sws *sessionWantSender) processUpdates(updates []update) []cid.Cid {
 		}()
 	}
 
-	return dontHaves.Keys()
+	return dontHaves
 }
 
 // checkForExhaustedWants checks if there are any wants for which all peers
 // have sent a DONT_HAVE. We call these "exhausted" wants.
-func (sws *sessionWantSender) checkForExhaustedWants(dontHaves []cid.Cid, newlyUnavailable []peer.ID) {
+func (sws *sessionWantSender) checkForExhaustedWants(dontHaves []auth.Want, newlyUnavailable []peer.ID) {
 	// If there are no new DONT_HAVEs, and no peers became unavailable, then
 	// we don't need to check for exhausted wants
 	if len(dontHaves) == 0 && len(newlyUnavailable) == 0 {
@@ -480,7 +492,7 @@ func (sws *sessionWantSender) checkForExhaustedWants(dontHaves []cid.Cid, newlyU
 	// (because it may be the last peer who hadn't sent a DONT_HAVE for a CID)
 	if len(newlyUnavailable) > 0 {
 		// Collect all pending wants
-		wants = make([]cid.Cid, len(sws.wants))
+		wants = make([]auth.Want, len(sws.wants))
 		for c := range sws.wants {
 			wants = append(wants, c)
 		}
@@ -503,7 +515,7 @@ func (sws *sessionWantSender) checkForExhaustedWants(dontHaves []cid.Cid, newlyU
 
 // processExhaustedWants filters the list so that only those wants that haven't
 // already been marked as exhausted are passed to onPeersExhausted()
-func (sws *sessionWantSender) processExhaustedWants(exhausted []cid.Cid) {
+func (sws *sessionWantSender) processExhaustedWants(exhausted []auth.Want) {
 	newlyExhausted := sws.newlyExhausted(exhausted)
 	if len(newlyExhausted) > 0 {
 		sws.onPeersExhausted(newlyExhausted)
@@ -512,8 +524,8 @@ func (sws *sessionWantSender) processExhaustedWants(exhausted []cid.Cid) {
 
 // convenience structs for passing around want-blocks and want-haves for a peer
 type wantSets struct {
-	wantBlocks *cid.Set
-	wantHaves  *cid.Set
+	wantBlocks *auth.Set
+	wantHaves  *auth.Set
 }
 
 type allWants map[peer.ID]*wantSets
@@ -521,8 +533,8 @@ type allWants map[peer.ID]*wantSets
 func (aw allWants) forPeer(p peer.ID) *wantSets {
 	if _, ok := aw[p]; !ok {
 		aw[p] = &wantSets{
-			wantBlocks: cid.NewSet(),
-			wantHaves:  cid.NewSet(),
+			wantBlocks: auth.NewSet(),
+			wantHaves:  auth.NewSet(),
 		}
 	}
 	return aw[p]
@@ -533,10 +545,10 @@ func (aw allWants) forPeer(p peer.ID) *wantSets {
 func (sws *sessionWantSender) sendNextWants(newlyAvailable []peer.ID) {
 	toSend := make(allWants)
 
-	for c, wi := range sws.wants {
+	for w, wi := range sws.wants {
 		// Ensure we send want-haves to any newly available peers
 		for _, p := range newlyAvailable {
-			toSend.forPeer(p).wantHaves.Add(c)
+			toSend.forPeer(p).wantHaves.Add(w)
 		}
 
 		// We already sent a want-block to a peer and haven't yet received a
@@ -553,15 +565,15 @@ func (sws *sessionWantSender) sendNextWants(newlyAvailable []peer.ID) {
 		}
 
 		// Record that we are sending a want-block for this want to the peer
-		sws.setWantSentTo(c, wi.bestPeer)
+		sws.setWantSentTo(w, wi.bestPeer)
 
 		// Send a want-block to the chosen peer
-		toSend.forPeer(wi.bestPeer).wantBlocks.Add(c)
+		toSend.forPeer(wi.bestPeer).wantBlocks.Add(w)
 
 		// Send a want-have to each other peer
 		for _, op := range sws.spm.Peers() {
 			if op != wi.bestPeer {
-				toSend.forPeer(op).wantHaves.Add(c)
+				toSend.forPeer(op).wantHaves.Add(w)
 			}
 		}
 	}
@@ -575,8 +587,8 @@ func (sws *sessionWantSender) sendWants(sends allWants) {
 	// For each peer we're sending a request to
 	for p, snd := range sends {
 		// Piggyback some other want-haves onto the request to the peer
-		for _, c := range sws.getPiggybackWantHaves(p, snd.wantBlocks) {
-			snd.wantHaves.Add(c)
+		for _, w := range sws.getPiggybackWantHaves(p, snd.wantBlocks) {
+			snd.wantHaves.Add(w)
 		}
 
 		// Send the wants to the peer.
@@ -597,13 +609,13 @@ func (sws *sessionWantSender) sendWants(sends allWants) {
 
 // getPiggybackWantHaves gets the want-haves that should be piggybacked onto
 // a request that we are making to send want-blocks to a peer
-func (sws *sessionWantSender) getPiggybackWantHaves(p peer.ID, wantBlocks *cid.Set) []cid.Cid {
-	var whs []cid.Cid
-	for c := range sws.wants {
+func (sws *sessionWantSender) getPiggybackWantHaves(p peer.ID, wantBlocks *auth.Set) []auth.Want {
+	var whs []auth.Want
+	for w := range sws.wants {
 		// Don't send want-have if we're already sending a want-block
 		// (or have previously)
-		if !wantBlocks.Has(c) && !sws.swbt.haveSentWantBlockTo(p, c) {
-			whs = append(whs, c)
+		if !wantBlocks.Has(w) && !sws.swbt.haveSentWantBlockTo(p, w) {
+			whs = append(whs, w)
 		}
 	}
 	return whs
@@ -611,12 +623,12 @@ func (sws *sessionWantSender) getPiggybackWantHaves(p peer.ID, wantBlocks *cid.S
 
 // newlyExhausted filters the list of keys for wants that have not already
 // been marked as exhausted (all peers indicated they don't have the block)
-func (sws *sessionWantSender) newlyExhausted(ks []cid.Cid) []cid.Cid {
-	var res []cid.Cid
-	for _, c := range ks {
-		if wi, ok := sws.wants[c]; ok {
+func (sws *sessionWantSender) newlyExhausted(ws []auth.Want) []auth.Want {
+	var res []auth.Want
+	for _, w := range ws {
+		if wi, ok := sws.wants[w]; ok {
 			if !wi.exhausted {
-				res = append(res, c)
+				res = append(res, w)
 				wi.exhausted = true
 			}
 		}
@@ -625,10 +637,18 @@ func (sws *sessionWantSender) newlyExhausted(ks []cid.Cid) []cid.Cid {
 }
 
 // removeWant is called when the corresponding block is received
-func (sws *sessionWantSender) removeWant(c cid.Cid) *wantInfo {
-	if wi, ok := sws.wants[c]; ok {
-		delete(sws.wants, c)
-		return wi
+func (sws *sessionWantSender) removeWant(c cid.Cid, from peer.ID) *wantInfo {
+	ws := sws.wantDups[c]
+	if len(ws) == 0 {
+		return nil
+	}
+	for _, w := range ws {
+		if wi, ok := sws.wants[w]; ok {
+			if wi.sentTo == from {
+				delete(sws.wants, w)
+				return wi
+			}
+		}
 	}
 	return nil
 }
@@ -636,9 +656,9 @@ func (sws *sessionWantSender) removeWant(c cid.Cid) *wantInfo {
 // updateWantsPeerAvailability is called when the availability changes for a
 // peer. It updates all the wants accordingly.
 func (sws *sessionWantSender) updateWantsPeerAvailability(p peer.ID, isNowAvailable bool) {
-	for c, wi := range sws.wants {
+	for w, wi := range sws.wants {
 		if isNowAvailable {
-			sws.updateWantBlockPresence(c, p)
+			sws.updateWantBlockPresence(w, p)
 		} else {
 			wi.removePeer(p)
 		}
@@ -647,17 +667,17 @@ func (sws *sessionWantSender) updateWantsPeerAvailability(p peer.ID, isNowAvaila
 
 // updateWantBlockPresence is called when a HAVE / DONT_HAVE is received for the given
 // want / peer
-func (sws *sessionWantSender) updateWantBlockPresence(c cid.Cid, p peer.ID) {
-	wi, ok := sws.wants[c]
+func (sws *sessionWantSender) updateWantBlockPresence(w auth.Want, p peer.ID) {
+	wi, ok := sws.wants[w]
 	if !ok {
 		return
 	}
 
 	// If the peer sent us a HAVE or DONT_HAVE for the cid, adjust the
 	// block presence for the peer / cid combination
-	if sws.bpm.PeerHasBlock(p, c) {
+	if sws.bpm.PeerHasBlock(p, w.Cid) {
 		wi.setPeerBlockPresence(p, BPHave)
-	} else if sws.bpm.PeerDoesNotHaveBlock(p, c) {
+	} else if sws.bpm.PeerDoesNotHaveBlock(p, w.Cid) {
 		wi.setPeerBlockPresence(p, BPDontHave)
 	} else {
 		wi.setPeerBlockPresence(p, BPUnknown)
@@ -665,16 +685,16 @@ func (sws *sessionWantSender) updateWantBlockPresence(c cid.Cid, p peer.ID) {
 }
 
 // Which peer was the want sent to
-func (sws *sessionWantSender) getWantSentTo(c cid.Cid) (peer.ID, bool) {
-	if wi, ok := sws.wants[c]; ok {
+func (sws *sessionWantSender) getWantSentTo(w auth.Want) (peer.ID, bool) {
+	if wi, ok := sws.wants[w]; ok {
 		return wi.sentTo, true
 	}
 	return "", false
 }
 
 // Record which peer the want was sent to
-func (sws *sessionWantSender) setWantSentTo(c cid.Cid, p peer.ID) {
-	if wi, ok := sws.wants[c]; ok {
+func (sws *sessionWantSender) setWantSentTo(w auth.Want, p peer.ID) {
+	if wi, ok := sws.wants[w]; ok {
 		wi.sentTo = p
 	}
 }

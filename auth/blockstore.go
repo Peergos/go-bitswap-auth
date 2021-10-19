@@ -37,6 +37,11 @@ type AuthBlockstore interface {
 	HashOnRead(enabled bool)
 }
 
+type Want struct {
+	Cid  cid.Cid
+	Auth string
+}
+
 type AuthBlock struct {
 	block blocks.Block
 }

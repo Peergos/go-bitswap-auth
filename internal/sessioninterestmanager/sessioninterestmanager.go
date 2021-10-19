@@ -30,17 +30,17 @@ func New() *SessionInterestManager {
 
 // When the client asks the session for blocks, the session calls
 // RecordSessionInterest() with those cids.
-func (sim *SessionInterestManager) RecordSessionInterest(ses uint64, ks []cid.Cid) {
+func (sim *SessionInterestManager) RecordSessionInterest(ses uint64, ks []auth.Want) {
 	sim.lk.Lock()
 	defer sim.lk.Unlock()
 
 	// For each key
-	for _, c := range ks {
+	for _, w := range ks {
 		// Record that the session wants the blocks
-		if want, ok := sim.wants[c]; ok {
+		if want, ok := sim.wants[w.Cid]; ok {
 			want[ses] = true
 		} else {
-			sim.wants[c] = map[uint64]bool{ses: true}
+			sim.wants[w.Cid] = map[uint64]bool{ses: true}
 		}
 	}
 }
@@ -88,26 +88,26 @@ func (sim *SessionInterestManager) RemoveSessionWants(ses uint64, ks []cid.Cid) 
 
 // When a request is cancelled, the session calls RemoveSessionInterested().
 // Returns the keys that no session is interested in any more.
-func (sim *SessionInterestManager) RemoveSessionInterested(ses uint64, ks []cid.Cid) []cid.Cid {
+func (sim *SessionInterestManager) RemoveSessionInterested(ses uint64, ws []auth.Want) []auth.Want {
 	sim.lk.Lock()
 	defer sim.lk.Unlock()
 
 	// The keys that no session is interested in
-	deletedKs := make([]cid.Cid, 0, len(ks))
+	deletedKs := make([]auth.Want, 0, len(ws))
 
 	// For each key
-	for _, c := range ks {
+	for _, w := range ws {
 		// If there is a list of sessions that want the key
-		if _, ok := sim.wants[c]; ok {
+		if _, ok := sim.wants[w.Cid]; ok {
 			// Remove the session from the list of sessions that want the key
-			delete(sim.wants[c], ses)
+			delete(sim.wants[w.Cid], ses)
 
 			// If there are no more sessions that want the key
-			if len(sim.wants[c]) == 0 {
+			if len(sim.wants[w.Cid]) == 0 {
 				// Clean up the list memory
-				delete(sim.wants, c)
+				delete(sim.wants, w.Cid)
 				// Add the key to the list of keys that no session is interested in
-				deletedKs = append(deletedKs, c)
+				deletedKs = append(deletedKs, w)
 			}
 		}
 	}

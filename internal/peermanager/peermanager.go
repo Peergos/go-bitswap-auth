@@ -9,15 +9,16 @@ import (
 
 	cid "github.com/ipfs/go-cid"
 	peer "github.com/libp2p/go-libp2p-core/peer"
+	"github.com/peergos/go-bitswap-auth/auth"
 )
 
 var log = logging.Logger("bs:peermgr")
 
 // PeerQueue provides a queue of messages to be sent for a single peer.
 type PeerQueue interface {
-	AddBroadcastWantHaves([]cid.Cid)
-	AddWants([]cid.Cid, []cid.Cid)
-	AddCancels([]cid.Cid)
+	AddBroadcastWantHaves([]auth.Want)
+	AddWants([]auth.Want, []auth.Want)
+	AddCancels([]auth.Want)
 	ResponseReceived(ks []cid.Cid)
 	Startup()
 	Shutdown()
@@ -134,7 +135,7 @@ func (pm *PeerManager) ResponseReceived(p peer.ID, ks []cid.Cid) {
 // to discover seeds).
 // For each peer it filters out want-haves that have previously been sent to
 // the peer.
-func (pm *PeerManager) BroadcastWantHaves(ctx context.Context, wantHaves []cid.Cid) {
+func (pm *PeerManager) BroadcastWantHaves(ctx context.Context, wantHaves []auth.Want) {
 	pm.pqLk.Lock()
 	defer pm.pqLk.Unlock()
 
@@ -143,7 +144,7 @@ func (pm *PeerManager) BroadcastWantHaves(ctx context.Context, wantHaves []cid.C
 
 // SendWants sends the given want-blocks and want-haves to the given peer.
 // It filters out wants that have previously been sent to the peer.
-func (pm *PeerManager) SendWants(ctx context.Context, p peer.ID, wantBlocks []cid.Cid, wantHaves []cid.Cid) {
+func (pm *PeerManager) SendWants(ctx context.Context, p peer.ID, wantBlocks []auth.Want, wantHaves []auth.Want) {
 	pm.pqLk.Lock()
 	defer pm.pqLk.Unlock()
 
@@ -154,7 +155,7 @@ func (pm *PeerManager) SendWants(ctx context.Context, p peer.ID, wantBlocks []ci
 
 // SendCancels sends cancels for the given keys to all peers who had previously
 // received a want for those keys.
-func (pm *PeerManager) SendCancels(ctx context.Context, cancelKs []cid.Cid) {
+func (pm *PeerManager) SendCancels(ctx context.Context, cancelKs []auth.Want) {
 	pm.pqLk.Lock()
 	defer pm.pqLk.Unlock()
 
@@ -163,7 +164,7 @@ func (pm *PeerManager) SendCancels(ctx context.Context, cancelKs []cid.Cid) {
 }
 
 // CurrentWants returns the list of pending wants (both want-haves and want-blocks).
-func (pm *PeerManager) CurrentWants() []cid.Cid {
+func (pm *PeerManager) CurrentWants() []auth.Want {
 	pm.pqLk.RLock()
 	defer pm.pqLk.RUnlock()
 
@@ -171,7 +172,7 @@ func (pm *PeerManager) CurrentWants() []cid.Cid {
 }
 
 // CurrentWantBlocks returns the list of pending want-blocks
-func (pm *PeerManager) CurrentWantBlocks() []cid.Cid {
+func (pm *PeerManager) CurrentWantBlocks() []auth.Want {
 	pm.pqLk.RLock()
 	defer pm.pqLk.RUnlock()
 
@@ -179,7 +180,7 @@ func (pm *PeerManager) CurrentWantBlocks() []cid.Cid {
 }
 
 // CurrentWantHaves returns the list of pending want-haves
-func (pm *PeerManager) CurrentWantHaves() []cid.Cid {
+func (pm *PeerManager) CurrentWantHaves() []auth.Want {
 	pm.pqLk.RLock()
 	defer pm.pqLk.RUnlock()
 
