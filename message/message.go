@@ -163,6 +163,7 @@ func newMsg(full bool) *impl {
 		full:           full,
 		wantlist:       make(map[auth.Want]*Entry),
 		blocks:         make(map[auth.Want]auth.AuthBlock),
+		rawData:        make(map[auth.Want][]byte),
 		blockPresences: make(map[auth.Want]pb.Message_BlockPresenceType),
 	}
 }
