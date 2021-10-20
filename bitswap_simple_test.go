@@ -49,7 +49,7 @@ func TestSimpleBlockExchangeWithAuth(t *testing.T) {
 	}
 
 	fmt.Println("This is hanging...")
-	received_block, err := my_instances[1].Exchange.GetBlock(context.Background(), my_block.Cid(), valid_auth)
+	received_block, err := my_instances[1].Exchange.GetBlock(context.Background(), auth.NewWant(my_block.Cid(), valid_auth))
 	if err != nil {
 		t.Fatal(err)
 	} else if my_block.Cid() != received_block.Cid() {
@@ -59,7 +59,7 @@ func TestSimpleBlockExchangeWithAuth(t *testing.T) {
 
 	fmt.Println("This is also hanging...")
 	//test that I only receive a block from a peer when I provide the correct auth string
-	_, err = my_instances[1].Exchange.GetBlock(context.Background(), my_block.Cid(), invalid_auth)
+	_, err = my_instances[1].Exchange.GetBlock(context.Background(), auth.NewWant(my_block.Cid(), invalid_auth))
 	if err == nil {
 		t.Fatal("Peer released block upon receiving request containing an invalid auth string!")
 	}

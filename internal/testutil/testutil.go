@@ -9,6 +9,7 @@ import (
 	blocksutil "github.com/ipfs/go-ipfs-blocksutil"
 	peer "github.com/libp2p/go-libp2p-core/peer"
 	bsmsg "github.com/peergos/go-bitswap-auth/message"
+        "github.com/peergos/go-bitswap-auth/auth"
 	"github.com/peergos/go-bitswap-auth/wantlist"
 )
 
@@ -45,7 +46,7 @@ func GenerateMessageEntries(n int, isCancel bool) []bsmsg.Entry {
 	for i := 0; i < n; i++ {
 		prioritySeq++
 		msg := bsmsg.Entry{
-			Entry:  wantlist.NewRefEntry(blockGenerator.Next().Cid(), prioritySeq),
+			Entry:  wantlist.NewRefEntry(auth.Want{Cid: blockGenerator.Next().Cid(), Auth: "authme"}, prioritySeq),
 			Cancel: isCancel,
 		}
 		bsmsgs = append(bsmsgs, msg)

@@ -523,7 +523,7 @@ func onePeerPerBlock(b *testing.B, provs []testinstance.Instance, blks []blocks.
 func oneAtATime(b *testing.B, bs *bitswap.Bitswap, ks []cid.Cid) {
 	ses := bs.NewSession(context.Background()).(*bssession.Session)
 	for _, c := range ks {
-		_, err := ses.GetBlock(context.Background(), c, "auth")
+		_, err := ses.GetBlock(context.Background(), auth.NewWant(c, "auth"))
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -531,10 +531,10 @@ func oneAtATime(b *testing.B, bs *bitswap.Bitswap, ks []cid.Cid) {
 	// b.Logf("Session fetch latency: %s", ses.GetAverageLatency())
 }
 
-func authArray(size int) []string {
-	res := make([]string, size)
-	for i := 0; i < size; i++ {
-		res[i] = "auth"
+func authArray(ks []cid.Cid) []auth.Want {
+	res := make([]auth.Want, len(ks))
+	for i,k := range ks {
+		res[i] = auth.NewWant(k, "auth")
 	}
 	return res
 }
@@ -543,7 +543,7 @@ func authArray(size int) []string {
 func batchFetchBy10(b *testing.B, bs *bitswap.Bitswap, ks []cid.Cid) {
 	ses := bs.NewSession(context.Background())
 	for i := 0; i < len(ks); i += 10 {
-		out, err := ses.GetBlocks(context.Background(), ks[i:i+10], authArray(10))
+		out, err := ses.GetBlocks(context.Background(), authArray(ks[i:i+10]))
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -561,7 +561,7 @@ func fetchAllConcurrent(b *testing.B, bs *bitswap.Bitswap, ks []cid.Cid) {
 		wg.Add(1)
 		go func(c cid.Cid) {
 			defer wg.Done()
-			_, err := ses.GetBlock(context.Background(), c, "auth")
+			_, err := ses.GetBlock(context.Background(), auth.NewWant(c, "auth"))
 			if err != nil {
 				b.Error(err)
 			}
@@ -572,7 +572,7 @@ func fetchAllConcurrent(b *testing.B, bs *bitswap.Bitswap, ks []cid.Cid) {
 
 func batchFetchAll(b *testing.B, bs *bitswap.Bitswap, ks []cid.Cid) {
 	ses := bs.NewSession(context.Background())
-	out, err := ses.GetBlocks(context.Background(), ks, authArray(len(ks)))
+	out, err := ses.GetBlocks(context.Background(), authArray(ks))
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -583,19 +583,19 @@ func batchFetchAll(b *testing.B, bs *bitswap.Bitswap, ks []cid.Cid) {
 // simulates the fetch pattern of trying to sync a unixfs file graph as fast as possible
 func unixfsFileFetch(b *testing.B, bs *bitswap.Bitswap, ks []cid.Cid) {
 	ses := bs.NewSession(context.Background())
-	_, err := ses.GetBlock(context.Background(), ks[0], "auth")
+	_, err := ses.GetBlock(context.Background(), auth.NewWant(ks[0], "auth"))
 	if err != nil {
 		b.Fatal(err)
 	}
 
-	out, err := ses.GetBlocks(context.Background(), ks[1:11], authArray(10))
+	out, err := ses.GetBlocks(context.Background(), authArray(ks[1:11]))
 	if err != nil {
 		b.Fatal(err)
 	}
 	for range out {
 	}
 
-	out, err = ses.GetBlocks(context.Background(), ks[11:], authArray(len(ks[11:])))
+	out, err = ses.GetBlocks(context.Background(), authArray(ks[11:]))
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -605,19 +605,19 @@ func unixfsFileFetch(b *testing.B, bs *bitswap.Bitswap, ks []cid.Cid) {
 
 func unixfsFileFetchLarge(b *testing.B, bs *bitswap.Bitswap, ks []cid.Cid) {
 	ses := bs.NewSession(context.Background())
-	_, err := ses.GetBlock(context.Background(), ks[0], "auth")
+	_, err := ses.GetBlock(context.Background(), auth.NewWant(ks[0], "auth"))
 	if err != nil {
 		b.Fatal(err)
 	}
 
-	out, err := ses.GetBlocks(context.Background(), ks[1:11], authArray(10))
+	out, err := ses.GetBlocks(context.Background(), authArray(ks[1:11]))
 	if err != nil {
 		b.Fatal(err)
 	}
 	for range out {
 	}
 
-	out, err = ses.GetBlocks(context.Background(), ks[11:100], authArray(89))
+	out, err = ses.GetBlocks(context.Background(), authArray(ks[11:100]))
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -644,7 +644,7 @@ func unixfsFileFetchLarge(b *testing.B, bs *bitswap.Bitswap, ks []cid.Cid) {
 			go func(grp []cid.Cid) {
 				defer wg.Done()
 
-				out, err = ses.GetBlocks(context.Background(), grp, authArray(len(grp)))
+				out, err = ses.GetBlocks(context.Background(), authArray(grp))
 				if err != nil {
 					anyErr = err
 				}

@@ -51,7 +51,7 @@ func TestClose(t *testing.T) {
 	bitswap := ig.Next()
 
 	bitswap.Exchange.Close()
-	_, err := bitswap.Exchange.GetBlock(context.Background(), block.Cid(), "auth")
+	_, err := bitswap.Exchange.GetBlock(context.Background(), auth.NewWant(block.Cid(), "auth"))
 	if err == nil {
 		t.Fatal("expected GetBlock to fail")
 	}
@@ -79,7 +79,7 @@ func TestProviderForKeyButNetworkCannotFind(t *testing.T) { // TODO revisit this
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Nanosecond)
 	defer cancel()
-	_, err = solo.Exchange.GetBlock(ctx, block.Cid(), "auth")
+	_, err = solo.Exchange.GetBlock(ctx, auth.NewWant(block.Cid(), "auth"))
 
 	if err != context.DeadlineExceeded {
 		t.Fatal("Expected DeadlineExceeded error")
@@ -109,7 +109,7 @@ func TestGetBlockFromPeerAfterPeerAnnounces(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	received, err := wantsBlock.Exchange.GetBlock(ctx, block.Cid(), "auth")
+	received, err := wantsBlock.Exchange.GetBlock(ctx, auth.NewWant(block.Cid(), "auth"))
 	if err != nil {
 		t.Log(err)
 		t.Fatal("Expected to succeed")
@@ -145,7 +145,7 @@ func TestDoesNotProvideWhenConfiguredNotTo(t *testing.T) {
 
 	ns := wantsBlock.Exchange.NewSession(ctx).(*bssession.Session)
 
-	received, err := ns.GetBlock(ctx, block.Cid(), "auth")
+	received, err := ns.GetBlock(ctx, auth.NewWant(block.Cid(), "auth"))
 	if received != nil {
 		t.Fatalf("Expected to find nothing, found %s", received)
 	}
@@ -162,7 +162,7 @@ func TestUnwantedBlockNotAdded(t *testing.T) {
 	net := tn.VirtualNetwork(mockrouting.NewServer(), delay.Fixed(kNetworkDelay))
 	block := blocks.NewBlock([]byte("block"))
 	bsMessage := bsmsg.New(true)
-	bsMessage.AddBlock(block)
+	bsMessage.AddBlock(block, "auth")
 
 	allow := func(c cid.Cid, p peer.ID, a string) bool {
 		return true
@@ -223,7 +223,7 @@ func TestPendingBlockAdded(t *testing.T) {
 	for _, b := range blks {
 		ks = append(ks, b.Cid())
 	}
-	outch, err := instance.Exchange.GetBlocks(ctx, ks, authArray(len(ks)))
+	outch, err := instance.Exchange.GetBlocks(ctx, authArray(ks))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -234,7 +234,7 @@ func TestPendingBlockAdded(t *testing.T) {
 	// Simulate receiving a message which contains the block in the "tofetch" queue
 	lastBlock := blks[len(blks)-1]
 	bsMessage := bsmsg.New(true)
-	bsMessage.AddBlock(lastBlock)
+	bsMessage.AddBlock(lastBlock, "auth")
 	unknownPeer := peer.ID("QmUHfvCQrzyR6vFXmeyCptfCWedfcmfa12V6UuziDtrw23")
 	instance.Exchange.ReceiveMessage(oneSecCtx, unknownPeer, bsMessage)
 
@@ -339,7 +339,7 @@ func PerformDistributionTest(t *testing.T, numInstances, numBlocks int) {
 		wg.Add(1)
 		go func(inst testinstance.Instance) {
 			defer wg.Done()
-			outch, err := inst.Exchange.GetBlocks(ctx, blkeys, authArray(len(blkeys)))
+			outch, err := inst.Exchange.GetBlocks(ctx, authArray(blkeys))
 			if err != nil {
 				errs <- err
 			}
@@ -397,7 +397,7 @@ func TestSendToWantingPeer(t *testing.T) {
 	// peerA requests and waits for block alpha
 	ctx, cancel := context.WithTimeout(context.Background(), waitTime)
 	defer cancel()
-	alphaPromise, err := peerA.Exchange.GetBlocks(ctx, []cid.Cid{alpha.Cid()}, authArray(1))
+	alphaPromise, err := peerA.Exchange.GetBlocks(ctx, authArray([]cid.Cid{alpha.Cid()}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -432,7 +432,7 @@ func TestEmptyKey(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 	defer cancel()
 
-	_, err := bs.GetBlock(ctx, cid.Cid{}, "auth")
+	_, err := bs.GetBlock(ctx, auth.NewWant(cid.Cid{}, "auth"))
 	if err != blockstore.ErrNotFound {
 		t.Error("empty str key should return ErrNotFound")
 	}
@@ -481,7 +481,7 @@ func TestBasicBitswap(t *testing.T) {
 
 	// Second peer broadcasts want for block CID
 	// (Received by first and third peers)
-	blk, err := instances[1].Exchange.GetBlock(ctx, blocks[0].Cid(), "auth")
+	blk, err := instances[1].Exchange.GetBlock(ctx, auth.NewWant(blocks[0].Cid(), "auth"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -552,7 +552,7 @@ func TestDoubleGet(t *testing.T) {
 	// through before the peers even get connected. This is okay, bitswap
 	// *should* be able to handle this.
 	ctx1, cancel1 := context.WithCancel(context.Background())
-	blkch1, err := instances[1].Exchange.GetBlocks(ctx1, []cid.Cid{blocks[0].Cid()}, authArray(1))
+	blkch1, err := instances[1].Exchange.GetBlocks(ctx1, authArray([]cid.Cid{blocks[0].Cid()}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -560,7 +560,7 @@ func TestDoubleGet(t *testing.T) {
 	ctx2, cancel2 := context.WithCancel(context.Background())
 	defer cancel2()
 
-	blkch2, err := instances[1].Exchange.GetBlocks(ctx2, []cid.Cid{blocks[0].Cid()}, authArray(1))
+	blkch2, err := instances[1].Exchange.GetBlocks(ctx2, authArray([]cid.Cid{blocks[0].Cid()}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -589,7 +589,7 @@ func TestDoubleGet(t *testing.T) {
 		p1wl := instances[0].Exchange.WantlistForPeer(instances[1].Peer)
 		if len(p1wl) != 1 {
 			t.Logf("wantlist view didnt have 1 item (had %d)", len(p1wl))
-		} else if !p1wl[0].Equals(blocks[0].Cid()) {
+		} else if !p1wl[0].Cid.Equals(blocks[0].Cid()) {
 			t.Logf("had 1 item, it was wrong: %s %s", blocks[0].Cid(), p1wl[0])
 		} else {
 			t.Log("had correct wantlist, somehow")
@@ -627,7 +627,7 @@ func TestWantlistCleanup(t *testing.T) {
 	// Once context times out, key should be removed from wantlist
 	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*50)
 	defer cancel()
-	_, err := bswap.GetBlock(ctx, keys[0], "auth")
+	_, err := bswap.GetBlock(ctx, auth.NewWant(keys[0], "auth"))
 	if err != context.DeadlineExceeded {
 		t.Fatal("shouldnt have fetched any blocks")
 	}
@@ -641,7 +641,7 @@ func TestWantlistCleanup(t *testing.T) {
 	// Once context times out, keys should be removed from wantlist
 	ctx, cancel = context.WithTimeout(context.Background(), time.Millisecond*50)
 	defer cancel()
-	_, err = bswap.GetBlocks(ctx, keys[:10], authArray(len(keys[:10])))
+	_, err = bswap.GetBlocks(ctx, authArray(keys[:10]))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -654,14 +654,14 @@ func TestWantlistCleanup(t *testing.T) {
 	}
 
 	// Send want for single block, with no timeout
-	_, err = bswap.GetBlocks(context.Background(), keys[:1], authArray(len(keys[:1])))
+	_, err = bswap.GetBlocks(context.Background(), authArray(keys[:1]))
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// Send want for 10 blocks
 	ctx, cancel = context.WithCancel(context.Background())
-	_, err = bswap.GetBlocks(ctx, keys[10:], authArray(len(keys[10:])))
+	_, err = bswap.GetBlocks(ctx, authArray(keys[10:]))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -679,7 +679,7 @@ func TestWantlistCleanup(t *testing.T) {
 
 	// Once the cancel is processed, we are left with the request for 1 block
 	time.Sleep(time.Millisecond * 50)
-	if !(len(bswap.GetWantHaves()) == 1 && bswap.GetWantHaves()[0] == keys[0]) {
+	if !(len(bswap.GetWantHaves()) == 1 && bswap.GetWantHaves()[0].Cid == keys[0]) {
 		t.Fatal("should only have keys[0] in wantlist")
 	}
 }
@@ -750,7 +750,7 @@ func TestBitswapLedgerOneWay(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 	defer cancel()
-	blk, err := instances[1].Exchange.GetBlock(ctx, blocks[0].Cid(), "auth")
+	blk, err := instances[1].Exchange.GetBlock(ctx, auth.NewWant(blocks[0].Cid(), "auth"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -810,14 +810,14 @@ func TestBitswapLedgerTwoWay(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 	defer cancel()
-	_, err = instances[1].Exchange.GetBlock(ctx, blocks[0].Cid(), "auth")
+	_, err = instances[1].Exchange.GetBlock(ctx, auth.NewWant(blocks[0].Cid(), "auth"))
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	ctx, cancel = context.WithTimeout(context.Background(), time.Second*5)
 	defer cancel()
-	blk, err := instances[0].Exchange.GetBlock(ctx, blocks[1].Cid(), "auth")
+	blk, err := instances[0].Exchange.GetBlock(ctx, auth.NewWant(blocks[1].Cid(), "auth"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -965,7 +965,7 @@ func TestTracer(t *testing.T) {
 
 	// Second peer broadcasts want for block CID
 	// (Received by first and third peers)
-	_, err = instances[1].Exchange.GetBlock(ctx, blocks[0].Cid(), "auth")
+	_, err = instances[1].Exchange.GetBlock(ctx, auth.NewWant(blocks[0].Cid(), "auth"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1043,7 +1043,7 @@ func TestTracer(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = instances[1].Exchange.GetBlock(ctx, blocks[1].Cid(), "auth")
+	_, err = instances[1].Exchange.GetBlock(ctx, auth.NewWant(blocks[1].Cid(), "auth"))
 	if err != nil {
 		t.Fatal(err)
 	}
