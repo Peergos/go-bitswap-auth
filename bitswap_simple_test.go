@@ -21,6 +21,7 @@ func TestSimpleBlockExchangeWithAuth(t *testing.T) {
 	valid_auth := "someauth"                                //get or calculate an auth string
 
 	allow := func(c cid.Cid, p peer.ID, a string) bool {
+                 fmt.Println("Allow", c, a)
 		return a == valid_auth
 	}
 	ig := testinstance.NewTestInstanceGenerator(tn.VirtualNetwork(mockrouting.NewServer(), delay.Fixed(0)), nil, nil, allow)
