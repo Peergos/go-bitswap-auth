@@ -3,13 +3,13 @@ package bitswap
 import (
 	"sort"
 
-	cid "github.com/ipfs/go-cid"
+	"github.com/peergos/go-bitswap-auth/auth"
 )
 
 // Stat is a struct that provides various statistics on bitswap operations
 type Stat struct {
 	ProvideBufLen    int
-	Wantlist         []cid.Cid
+	Wantlist         []auth.Want
 	Peers            []string
 	BlocksReceived   uint64
 	DataReceived     uint64

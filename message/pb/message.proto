@@ -28,6 +28,7 @@ message Message {
   message Block {
     bytes prefix = 1;		// CID prefix (cid version, multicodec and multihash prefix (type + length)
     bytes data = 2;
+    string auth = 3;
   }
 
   enum BlockPresenceType {
@@ -37,6 +38,7 @@ message Message {
   message BlockPresence {
     bytes cid = 1 [(gogoproto.customtype) = "Cid", (gogoproto.nullable) = false];
     BlockPresenceType type = 2;
+    string auth = 3;
   }
 
   Wantlist wantlist = 1 [(gogoproto.nullable) = false];

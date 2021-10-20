@@ -81,7 +81,7 @@ func (bs *Bitswap) logOutgoingBlocks(env *engine.Envelope) {
 	self := bs.network.Self()
 
 	for _, blockPresence := range env.Message.BlockPresences() {
-		c := blockPresence.Cid
+		c := blockPresence.Want.Cid
 		switch blockPresence.Type {
 		case pb.Message_Have:
 			log.Debugw("sent message",

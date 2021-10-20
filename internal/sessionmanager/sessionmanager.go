@@ -5,7 +5,6 @@ import (
 	"sync"
 	"time"
 
-	cid "github.com/ipfs/go-cid"
 	delay "github.com/ipfs/go-ipfs-delay"
 	peer "github.com/libp2p/go-libp2p-core/peer"
 	"github.com/peergos/go-bitswap-auth/auth"
@@ -20,7 +19,7 @@ import (
 type Session interface {
 	exchange.Fetcher
 	ID() uint64
-	ReceiveFrom(peer.ID, []cid.Cid, []cid.Cid, []cid.Cid)
+	ReceiveFrom(peer.ID, []auth.Want, []auth.Want, []auth.Want)
 	Shutdown()
 }
 
@@ -145,7 +144,7 @@ func (sm *SessionManager) GetNextSessionID() uint64 {
 }
 
 // ReceiveFrom is called when a new message is received
-func (sm *SessionManager) ReceiveFrom(ctx context.Context, p peer.ID, blks []cid.Cid, haves []cid.Cid, dontHaves []cid.Cid) {
+func (sm *SessionManager) ReceiveFrom(ctx context.Context, p peer.ID, blks []auth.Want, haves []auth.Want, dontHaves []auth.Want) {
 	// Record block presence for HAVE / DONT_HAVE
 	sm.blockPresenceManager.ReceiveFrom(p, haves, dontHaves)
 

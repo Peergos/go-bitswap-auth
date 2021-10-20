@@ -37,12 +37,19 @@ type AuthBlockstore interface {
 	HashOnRead(enabled bool)
 }
 
+var Undef = Want{}
+
 type Want struct {
 	Cid  cid.Cid
 	Auth string
 }
 
+func (w Want) Defined() bool {
+	return w.Cid.Defined()
+}
+
 type AuthBlock struct {
+	Want  Want
 	block blocks.Block
 }
 

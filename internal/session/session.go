@@ -188,7 +188,7 @@ func (s *Session) Shutdown() {
 }
 
 // ReceiveFrom receives incoming blocks from the given peer.
-func (s *Session) ReceiveFrom(from peer.ID, ks []cid.Cid, haves []cid.Cid, dontHaves []cid.Cid) {
+func (s *Session) ReceiveFrom(from peer.ID, ks []auth.Want, haves []auth.Want, dontHaves []auth.Want) {
 	// The SessionManager tells each Session about all keys that it may be
 	// interested in. Here the Session filters the keys to the ones that this
 	// particular Session is interested in.
@@ -207,12 +207,12 @@ func (s *Session) ReceiveFrom(from peer.ID, ks []cid.Cid, haves []cid.Cid, dontH
 
 	// Inform the session that blocks have been received
 	select {
-	case s.incoming <- op{op: opReceive, keys: ks}:
+	case s.incoming <- op{op: opReceive, wants: ks}:
 	case <-s.ctx.Done():
 	}
 }
 
-func (s *Session) logReceiveFrom(from peer.ID, interestedKs []cid.Cid, haves []cid.Cid, dontHaves []cid.Cid) {
+func (s *Session) logReceiveFrom(from peer.ID, interestedKs []auth.Want, haves []auth.Want, dontHaves []auth.Want) {
 	// Save some CPU cycles if log level is higher than debug
 	if ce := sflog.Check(zap.DebugLevel, "Bitswap <- rcv message"); ce == nil {
 		return
@@ -306,7 +306,7 @@ func (s *Session) run(ctx context.Context) {
 			switch oper.op {
 			case opReceive:
 				// Received blocks
-				s.handleReceive(oper.keys)
+				s.handleReceive(oper.wants)
 			case opWant:
 				// Client wants blocks
 				s.wantBlocks(ctx, oper.wants)
@@ -360,7 +360,7 @@ func (s *Session) broadcast(ctx context.Context, wants []auth.Want) {
 		// Typically if the provider has the first block they will have
 		// the rest of the blocks also.
 		log.Debugw("FindMorePeers", "session", s.id, "cid", wants[0], "pending", len(wants))
-		s.findMorePeers(ctx, wants[0].Cid)
+		s.findMorePeers(ctx, wants[0])
 	}
 	s.resetIdleTick()
 
@@ -380,7 +380,7 @@ func (s *Session) handlePeriodicSearch(ctx context.Context) {
 
 	// TODO: come up with a better strategy for determining when to search
 	// for new providers for blocks.
-	s.findMorePeers(ctx, randomWant.Cid)
+	s.findMorePeers(ctx, randomWant)
 
 	s.broadcastWantHaves(ctx, []auth.Want{randomWant})
 
@@ -389,12 +389,12 @@ func (s *Session) handlePeriodicSearch(ctx context.Context) {
 
 // findMorePeers attempts to find more peers for a session by searching for
 // providers for the given Cid
-func (s *Session) findMorePeers(ctx context.Context, c cid.Cid) {
-	go func(k cid.Cid) {
-		for p := range s.providerFinder.FindProvidersAsync(ctx, k) {
+func (s *Session) findMorePeers(ctx context.Context, c auth.Want) {
+	go func(k auth.Want) {
+		for p := range s.providerFinder.FindProvidersAsync(ctx, k.Cid) {
 			// When a provider indicates that it has a cid, it's equivalent to
 			// the providing peer sending a HAVE
-			s.sws.Update(p, nil, []cid.Cid{c}, nil)
+			s.sws.Update(p, nil, []auth.Want{c}, nil)
 		}
 	}(c)
 }
@@ -414,7 +414,7 @@ func (s *Session) handleShutdown() {
 }
 
 // handleReceive is called when the session receives blocks from a peer
-func (s *Session) handleReceive(ks []cid.Cid) {
+func (s *Session) handleReceive(ks []auth.Want) {
 	// Record which blocks have been received and figure out the total latency
 	// for fetching the blocks
 	wanted, totalLatency := s.sw.BlocksReceived(ks)

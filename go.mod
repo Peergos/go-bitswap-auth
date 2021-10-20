@@ -4,7 +4,6 @@ require (
 	github.com/benbjohnson/clock v1.1.0
 	github.com/cskr/pubsub v1.0.2
 	github.com/gogo/protobuf v1.3.2
-	github.com/google/protobuf v3.18.1+incompatible // indirect
 	github.com/google/uuid v1.2.0
 	github.com/ipfs/go-block-format v0.0.3
 	github.com/ipfs/go-cid v0.0.7
@@ -28,7 +27,7 @@ require (
 	github.com/libp2p/go-msgio v0.0.6
 	github.com/multiformats/go-multiaddr v0.3.3
 	github.com/multiformats/go-multistream v0.2.2
-	github.com/peergos/go-ipfs-exchange-interface-auth v0.1.1
+	github.com/peergos/go-ipfs-exchange-interface-auth v0.2.0
 	github.com/stretchr/testify v1.7.0
 	go.uber.org/zap v1.16.0
 )

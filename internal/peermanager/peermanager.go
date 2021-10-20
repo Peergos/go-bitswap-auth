@@ -7,7 +7,6 @@ import (
 	logging "github.com/ipfs/go-log"
 	"github.com/ipfs/go-metrics-interface"
 
-	cid "github.com/ipfs/go-cid"
 	peer "github.com/libp2p/go-libp2p-core/peer"
 	"github.com/peergos/go-bitswap-auth/auth"
 )
@@ -19,7 +18,7 @@ type PeerQueue interface {
 	AddBroadcastWantHaves([]auth.Want)
 	AddWants([]auth.Want, []auth.Want)
 	AddCancels([]auth.Want)
-	ResponseReceived(ks []cid.Cid)
+	ResponseReceived(ks []auth.Want)
 	Startup()
 	Shutdown()
 }
@@ -121,7 +120,7 @@ func (pm *PeerManager) Disconnected(p peer.ID) {
 // ResponseReceived is called when a message is received from the network.
 // ks is the set of blocks, HAVEs and DONT_HAVEs in the message
 // Note that this is just used to calculate latency.
-func (pm *PeerManager) ResponseReceived(p peer.ID, ks []cid.Cid) {
+func (pm *PeerManager) ResponseReceived(p peer.ID, ks []auth.Want) {
 	pm.pqLk.Lock()
 	pq, ok := pm.peerQueues[p]
 	pm.pqLk.Unlock()

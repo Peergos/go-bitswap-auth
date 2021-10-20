@@ -42,11 +42,11 @@ type update struct {
 	// Which peer sent the update
 	from peer.ID
 	// cids of blocks received
-	ks []cid.Cid
+	ks []auth.Want
 	// HAVE message
-	haves []cid.Cid
+	haves []auth.Want
 	// DONT_HAVE message
-	dontHaves []cid.Cid
+	dontHaves []auth.Want
 }
 
 // peerAvailability indicates a peer's connection state
@@ -164,7 +164,7 @@ func (sws *sessionWantSender) Cancel(ws []auth.Want) {
 
 // Update is called when the session receives a message with incoming blocks
 // or HAVE / DONT_HAVE
-func (sws *sessionWantSender) Update(from peer.ID, ks []cid.Cid, haves []cid.Cid, dontHaves []cid.Cid) {
+func (sws *sessionWantSender) Update(from peer.ID, ks []auth.Want, haves []auth.Want, dontHaves []auth.Want) {
 	hasUpdate := len(ks) > 0 || len(haves) > 0 || len(dontHaves) > 0
 	if !hasUpdate {
 		return
@@ -377,7 +377,7 @@ func (sws *sessionWantSender) untrackWant(w auth.Want) {
 // It returns all DONT_HAVEs.
 func (sws *sessionWantSender) processUpdates(updates []update) []auth.Want {
 	// Process received blocks keys
-	blkCids := cid.NewSet()
+	blkCids := auth.NewSet()
 	for _, upd := range updates {
 		for _, c := range upd.ks {
 			blkCids.Add(c)
@@ -402,7 +402,7 @@ func (sws *sessionWantSender) processUpdates(updates []update) []auth.Want {
 	dontHaves := []auth.Want{}
 	prunePeers := make(map[peer.ID]struct{})
 	for _, upd := range updates {
-		for _, c := range upd.dontHaves {
+		for _, w := range upd.dontHaves {
 			// Track the number of consecutive DONT_HAVEs each peer receives
 			if sws.peerConsecutiveDontHaves[upd.from] == peerDontHaveLimit {
 				prunePeers[upd.from] = struct{}{}
@@ -412,23 +412,22 @@ func (sws *sessionWantSender) processUpdates(updates []update) []auth.Want {
 
 			// If we already received a block for the want, there's no need to
 			// update block presence etc
-			if blkCids.Has(c) {
+			if blkCids.Has(w) {
 				continue
 			}
 
 			// Update the block presence for the peer
-			for _, w := range sws.wantDups[c] {
-				dontHaves = append(dontHaves, w)
-				sws.updateWantBlockPresence(w, upd.from)
 
-				// Check if the DONT_HAVE is in response to a want-block
-				// (could also be in response to want-have)
-				if sws.swbt.haveSentWantBlockTo(upd.from, w) {
-					// If we were waiting for a response from this peer, clear
-					// sentTo so that we can send the want to another peer
-					if sentTo, ok := sws.getWantSentTo(w); ok && sentTo == upd.from {
-						sws.setWantSentTo(w, "")
-					}
+			dontHaves = append(dontHaves, w)
+			sws.updateWantBlockPresence(w, upd.from)
+
+			// Check if the DONT_HAVE is in response to a want-block
+			// (could also be in response to want-have)
+			if sws.swbt.haveSentWantBlockTo(upd.from, w) {
+				// If we were waiting for a response from this peer, clear
+				// sentTo so that we can send the want to another peer
+				if sentTo, ok := sws.getWantSentTo(w); ok && sentTo == upd.from {
+					sws.setWantSentTo(w, "")
 				}
 			}
 		}
@@ -436,13 +435,11 @@ func (sws *sessionWantSender) processUpdates(updates []update) []auth.Want {
 
 	// Process received HAVEs
 	for _, upd := range updates {
-		for _, c := range upd.haves {
+		for _, w := range upd.haves {
 			// If we haven't already received a block for the want
-			if !blkCids.Has(c) {
+			if !blkCids.Has(w) {
 				// Update the block presence for the peer
-				for _, w := range sws.wantDups[c] {
-					sws.updateWantBlockPresence(w, upd.from)
-				}
+				sws.updateWantBlockPresence(w, upd.from)
 			}
 
 			// Clear the consecutive DONT_HAVE count for the peer
@@ -637,17 +634,11 @@ func (sws *sessionWantSender) newlyExhausted(ws []auth.Want) []auth.Want {
 }
 
 // removeWant is called when the corresponding block is received
-func (sws *sessionWantSender) removeWant(c cid.Cid, from peer.ID) *wantInfo {
-	ws := sws.wantDups[c]
-	if len(ws) == 0 {
-		return nil
-	}
-	for _, w := range ws {
-		if wi, ok := sws.wants[w]; ok {
-			if wi.sentTo == from {
-				delete(sws.wants, w)
-				return wi
-			}
+func (sws *sessionWantSender) removeWant(w auth.Want, from peer.ID) *wantInfo {
+	if wi, ok := sws.wants[w]; ok {
+		if wi.sentTo == from {
+			delete(sws.wants, w)
+			return wi
 		}
 	}
 	return nil

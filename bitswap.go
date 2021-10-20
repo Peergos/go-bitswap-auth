@@ -191,7 +191,7 @@ func New(parent context.Context, network bsnet.BitSwapNetwork,
 	// or when no response is received within a timeout.
 	var sm *bssm.SessionManager
 	var bs *Bitswap
-	onDontHaveTimeout := func(p peer.ID, dontHaves []cid.Cid) {
+	onDontHaveTimeout := func(p peer.ID, dontHaves []auth.Want) {
 		// Simulate a message arriving with DONT_HAVEs
 		if bs.simulateDontHavesOnTimeout {
 			sm.ReceiveFrom(ctx, p, nil, nil, dontHaves)
@@ -389,16 +389,16 @@ type counters struct {
 
 // GetBlock attempts to retrieve a particular block from peers within the
 // deadline enforced by the context.
-func (bs *Bitswap) GetBlock(parent context.Context, k cid.Cid, auth string) (blocks.Block, error) {
-	return bsgetter.SyncGetBlock(parent, k, auth, bs.GetBlocks)
+func (bs *Bitswap) GetBlock(parent context.Context, w auth.Want) (blocks.Block, error) {
+	return bsgetter.SyncGetBlock(parent, w, bs.GetBlocks)
 }
 
 // WantlistForPeer returns the currently understood list of blocks requested by a
 // given peer.
-func (bs *Bitswap) WantlistForPeer(p peer.ID) []cid.Cid {
-	var out []cid.Cid
+func (bs *Bitswap) WantlistForPeer(p peer.ID) []auth.Want {
+	var out []auth.Want
 	for _, e := range bs.engine.WantlistForPeer(p) {
-		out = append(out, e.Cid)
+		out = append(out, e.Want)
 	}
 	return out
 }
@@ -416,9 +416,9 @@ func (bs *Bitswap) LedgerForPeer(p peer.ID) *decision.Receipt {
 // NB: Your request remains open until the context expires. To conserve
 // resources, provide a context with a reasonably short deadline (ie. not one
 // that lasts throughout the lifetime of the server)
-func (bs *Bitswap) GetBlocks(ctx context.Context, keys []cid.Cid, auth []string) (<-chan blocks.Block, error) {
+func (bs *Bitswap) GetBlocks(ctx context.Context, keys []auth.Want) (<-chan blocks.Block, error) {
 	session := bs.sm.NewSession(ctx, bs.provSearchDelay, bs.rebroadcastDelay)
-	return session.GetBlocks(ctx, keys, auth)
+	return session.GetBlocks(ctx, keys)
 }
 
 // HasBlock announces the existence of a block to this bitswap service. The
@@ -431,7 +431,7 @@ func (bs *Bitswap) HasBlock(blk auth.AuthBlock) error {
 // from the user, not when receiving it from the network.
 // In case you run `git blame` on this comment, I'll save you some time: ask
 // @whyrusleeping, I don't know the answers you seek.
-func (bs *Bitswap) receiveBlocksFrom(ctx context.Context, from peer.ID, blks []auth.AuthBlock, haves []cid.Cid, dontHaves []cid.Cid) error {
+func (bs *Bitswap) receiveBlocksFrom(ctx context.Context, from peer.ID, blks []auth.AuthBlock, haves []auth.Want, dontHaves []auth.Want) error {
 	select {
 	case <-bs.process.Closing():
 		return errors.New("bitswap is closed")
@@ -464,15 +464,15 @@ func (bs *Bitswap) receiveBlocksFrom(ctx context.Context, from peer.ID, blks []a
 	// to the same node. We should address this soon, but i'm not going to do
 	// it now as it requires more thought and isnt causing immediate problems.
 
-	allKs := make([]cid.Cid, 0, len(blks))
+	allKs := make([]auth.Want, 0, len(blks))
 	for _, b := range blks {
-		allKs = append(allKs, b.Cid())
+		allKs = append(allKs, b.Want)
 	}
 
 	// If the message came from the network
 	if from != "" {
 		// Inform the PeerManager so that we can calculate per-peer latency
-		combined := make([]cid.Cid, 0, len(allKs)+len(haves)+len(dontHaves))
+		combined := make([]auth.Want, 0, len(allKs)+len(haves)+len(dontHaves))
 		combined = append(combined, allKs...)
 		combined = append(combined, haves...)
 		combined = append(combined, dontHaves...)
@@ -635,17 +635,17 @@ func (bs *Bitswap) Close() error {
 
 // GetWantlist returns the current local wantlist (both want-blocks and
 // want-haves).
-func (bs *Bitswap) GetWantlist() []cid.Cid {
+func (bs *Bitswap) GetWantlist() []auth.Want {
 	return bs.pm.CurrentWants()
 }
 
 // GetWantBlocks returns the current list of want-blocks.
-func (bs *Bitswap) GetWantBlocks() []cid.Cid {
+func (bs *Bitswap) GetWantBlocks() []auth.Want {
 	return bs.pm.CurrentWantBlocks()
 }
 
 // GetWanthaves returns the current list of want-haves.
-func (bs *Bitswap) GetWantHaves() []cid.Cid {
+func (bs *Bitswap) GetWantHaves() []auth.Want {
 	return bs.pm.CurrentWantHaves()
 }
 

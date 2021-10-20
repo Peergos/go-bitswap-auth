@@ -23,15 +23,15 @@ func New() *BlockPresenceManager {
 
 // ReceiveFrom is called when a peer sends us information about which blocks
 // it has and does not have
-func (bpm *BlockPresenceManager) ReceiveFrom(p peer.ID, haves []cid.Cid, dontHaves []cid.Cid) {
+func (bpm *BlockPresenceManager) ReceiveFrom(p peer.ID, haves []auth.Want, dontHaves []auth.Want) {
 	bpm.Lock()
 	defer bpm.Unlock()
 
 	for _, c := range haves {
-		bpm.updateBlockPresence(p, c, true)
+		bpm.updateBlockPresence(p, c.Cid, true)
 	}
 	for _, c := range dontHaves {
-		bpm.updateBlockPresence(p, c, false)
+		bpm.updateBlockPresence(p, c.Cid, false)
 	}
 }
 

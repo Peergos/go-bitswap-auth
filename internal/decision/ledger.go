@@ -3,11 +3,10 @@ package decision
 import (
 	"sync"
 
+	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/peergos/go-bitswap-auth/auth"
 	pb "github.com/peergos/go-bitswap-auth/message/pb"
 	wl "github.com/peergos/go-bitswap-auth/wantlist"
-
-	"github.com/ipfs/go-cid"
-	"github.com/libp2p/go-libp2p-core/peer"
 )
 
 func newLedger(p peer.ID) *ledger {
@@ -28,16 +27,16 @@ type ledger struct {
 	lk sync.RWMutex
 }
 
-func (l *ledger) Wants(k cid.Cid, priority int32, wantType pb.Message_Wantlist_WantType) {
+func (l *ledger) Wants(k auth.Want, priority int32, wantType pb.Message_Wantlist_WantType) {
 	log.Debugf("peer %s wants %s", l.Partner, k)
 	l.wantList.Add(k, priority, wantType)
 }
 
-func (l *ledger) CancelWant(k cid.Cid) bool {
+func (l *ledger) CancelWant(k auth.Want) bool {
 	return l.wantList.Remove(k)
 }
 
-func (l *ledger) WantListContains(k cid.Cid) (wl.Entry, bool) {
+func (l *ledger) WantListContains(k auth.Want) (wl.Entry, bool) {
 	return l.wantList.Contains(k)
 }
 

@@ -6,8 +6,8 @@ import (
 	"time"
 
 	"github.com/benbjohnson/clock"
-	cid "github.com/ipfs/go-cid"
 	"github.com/libp2p/go-libp2p/p2p/protocol/ping"
+	"github.com/peergos/go-bitswap-auth/auth"
 )
 
 const (
@@ -50,7 +50,7 @@ type PeerConnection interface {
 // pendingWant keeps track of a want that has been sent and we're waiting
 // for a response or for a timeout to expire
 type pendingWant struct {
-	c      cid.Cid
+	c      auth.Want
 	active bool
 	sent   time.Time
 }
@@ -65,7 +65,7 @@ type dontHaveTimeoutMgr struct {
 	ctx                        context.Context
 	shutdown                   func()
 	peerConn                   PeerConnection
-	onDontHaveTimeout          func([]cid.Cid)
+	onDontHaveTimeout          func([]auth.Want)
 	defaultTimeout             time.Duration
 	maxTimeout                 time.Duration
 	pingLatencyMultiplier      int
@@ -77,7 +77,7 @@ type dontHaveTimeoutMgr struct {
 	// has the timeout manager started
 	started bool
 	// wants that are active (waiting for a response or timeout)
-	activeWants map[cid.Cid]*pendingWant
+	activeWants map[auth.Want]*pendingWant
 	// queue of wants, from oldest to newest
 	wantQueue []*pendingWant
 	// time to wait for a response (depends on latency)
@@ -92,7 +92,7 @@ type dontHaveTimeoutMgr struct {
 
 // newDontHaveTimeoutMgr creates a new dontHaveTimeoutMgr
 // onDontHaveTimeout is called when pending keys expire (not cancelled before timeout)
-func newDontHaveTimeoutMgr(pc PeerConnection, onDontHaveTimeout func([]cid.Cid), clock clock.Clock) *dontHaveTimeoutMgr {
+func newDontHaveTimeoutMgr(pc PeerConnection, onDontHaveTimeout func([]auth.Want), clock clock.Clock) *dontHaveTimeoutMgr {
 	return newDontHaveTimeoutMgrWithParams(pc, onDontHaveTimeout, dontHaveTimeout, maxTimeout,
 		pingLatencyMultiplier, messageLatencyMultiplier, maxExpectedWantProcessTime, clock, nil)
 }
@@ -100,7 +100,7 @@ func newDontHaveTimeoutMgr(pc PeerConnection, onDontHaveTimeout func([]cid.Cid),
 // newDontHaveTimeoutMgrWithParams is used by the tests
 func newDontHaveTimeoutMgrWithParams(
 	pc PeerConnection,
-	onDontHaveTimeout func([]cid.Cid),
+	onDontHaveTimeout func([]auth.Want),
 	defaultTimeout time.Duration,
 	maxTimeout time.Duration,
 	pingLatencyMultiplier int,
@@ -115,7 +115,7 @@ func newDontHaveTimeoutMgrWithParams(
 		ctx:                        ctx,
 		shutdown:                   shutdown,
 		peerConn:                   pc,
-		activeWants:                make(map[cid.Cid]*pendingWant),
+		activeWants:                make(map[auth.Want]*pendingWant),
 		timeout:                    defaultTimeout,
 		messageLatency:             &latencyEwma{alpha: messageLatencyAlpha},
 		defaultTimeout:             defaultTimeout,
@@ -229,7 +229,7 @@ func (dhtm *dontHaveTimeoutMgr) checkForTimeouts() {
 
 	// Figure out which of the blocks that were wanted were not received
 	// within the timeout
-	expired := make([]cid.Cid, 0, len(dhtm.activeWants))
+	expired := make([]auth.Want, 0, len(dhtm.activeWants))
 	for len(dhtm.wantQueue) > 0 {
 		pw := dhtm.wantQueue[0]
 
@@ -293,7 +293,7 @@ func (dhtm *dontHaveTimeoutMgr) consumeTimeouts() {
 
 // AddPending adds the given keys that will expire if not cancelled before
 // the timeout
-func (dhtm *dontHaveTimeoutMgr) AddPending(ks []cid.Cid) {
+func (dhtm *dontHaveTimeoutMgr) AddPending(ks []auth.Want) {
 	if len(ks) == 0 {
 		return
 	}
@@ -327,7 +327,7 @@ func (dhtm *dontHaveTimeoutMgr) AddPending(ks []cid.Cid) {
 }
 
 // CancelPending is called when we receive a response for a key
-func (dhtm *dontHaveTimeoutMgr) CancelPending(ks []cid.Cid) {
+func (dhtm *dontHaveTimeoutMgr) CancelPending(ks []auth.Want) {
 	dhtm.lk.Lock()
 	defer dhtm.lk.Unlock()
 
@@ -341,7 +341,7 @@ func (dhtm *dontHaveTimeoutMgr) CancelPending(ks []cid.Cid) {
 }
 
 // fireTimeout fires the onDontHaveTimeout method with the timed out keys
-func (dhtm *dontHaveTimeoutMgr) fireTimeout(pending []cid.Cid) {
+func (dhtm *dontHaveTimeoutMgr) fireTimeout(pending []auth.Want) {
 	// Make sure the timeout manager has not been shut down
 	if dhtm.ctx.Err() != nil {
 		return
