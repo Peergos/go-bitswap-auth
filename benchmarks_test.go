@@ -533,7 +533,7 @@ func oneAtATime(b *testing.B, bs *bitswap.Bitswap, ks []cid.Cid) {
 
 func authArray(ks []cid.Cid) []auth.Want {
 	res := make([]auth.Want, len(ks))
-	for i,k := range ks {
+	for i, k := range ks {
 		res[i] = auth.NewWant(k, "auth")
 	}
 	return res

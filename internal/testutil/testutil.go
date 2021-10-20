@@ -8,8 +8,8 @@ import (
 	cid "github.com/ipfs/go-cid"
 	blocksutil "github.com/ipfs/go-ipfs-blocksutil"
 	peer "github.com/libp2p/go-libp2p-core/peer"
+	"github.com/peergos/go-bitswap-auth/auth"
 	bsmsg "github.com/peergos/go-bitswap-auth/message"
-        "github.com/peergos/go-bitswap-auth/auth"
 	"github.com/peergos/go-bitswap-auth/wantlist"
 )
 

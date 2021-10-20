@@ -409,10 +409,8 @@ func (e *Engine) nextEnvelope(ctx context.Context) (*Envelope, error) {
 		blockWants := make([]auth.Want, 0, len(nextTasks))
 		blockTasks := make(map[auth.Want]*taskData, len(nextTasks))
 		for _, t := range nextTasks {
-			c := t.Topic.(cid.Cid)
+			w := t.Topic.(auth.Want)
 			td := t.Data.(*taskData)
-			a := td.Auth
-			w := auth.Want{Cid: c, Auth: a}
 			if td.HaveBlock {
 				if td.IsWantBlock {
 					blockWants = append(blockWants, w)

@@ -49,7 +49,7 @@ func (w Want) Defined() bool {
 }
 
 func NewWant(c cid.Cid, a string) Want {
-     return Want{Cid: c, Auth: a}
+	return Want{Cid: c, Auth: a}
 }
 
 type AuthBlock struct {
