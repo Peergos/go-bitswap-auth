@@ -16,9 +16,9 @@ import (
 )
 
 func TestSimpleBlockExchangeWithAuth(t *testing.T) {
-	my_block := blocks.NewBlock([]byte{'t', 'e', 's', 't'}) //assuming there will be a block creation function that takes raw bytes and adds auth information
-	invalid_auth := ""                                      //assuming that the empty string is always invalid; otherwise, do something else
-	valid_auth := "someauth"                                //get or calculate an auth string
+	my_block := blocks.NewBlock([]byte{'t', 'e', 's', 't'})
+	invalid_auth := "bad-auth"
+	valid_auth := "good-auth"
 
 	allowGen := func(i int) func(cid.Cid, peer.ID, string) bool {
 		return func(c cid.Cid, p peer.ID, a string) bool {
@@ -49,6 +49,11 @@ func TestSimpleBlockExchangeWithAuth(t *testing.T) {
 		t.Fatal(err)
 	} else if my_block.Cid() != block_from_auth_blockstore.Cid() {
 		t.Fatal("expected to retrieve the same block I stored")
+	}
+
+        _, err = my_instances[1].Blockstore().Get(my_block.Cid(), my_instances[0].Peer, invalid_auth)
+	if err == nil {
+		t.Fatal("Able to retrieve block from block store tht doesn't have it, using invalid auth string!")
 	}
 
 	fmt.Println("This is hanging because it never sends a response block...")
