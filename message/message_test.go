@@ -4,13 +4,13 @@ import (
 	"bytes"
 	"testing"
 
-	blocksutil "github.com/ipfs/go-ipfs-blocksutil"
-	pb "github.com/peergos/go-bitswap-auth/message/pb"
-	"github.com/peergos/go-bitswap-auth/wantlist"
-        "github.com/peergos/go-bitswap-auth/auth"
 	blocks "github.com/ipfs/go-block-format"
 	cid "github.com/ipfs/go-cid"
+	blocksutil "github.com/ipfs/go-ipfs-blocksutil"
 	u "github.com/ipfs/go-ipfs-util"
+	"github.com/peergos/go-bitswap-auth/auth"
+	pb "github.com/peergos/go-bitswap-auth/message/pb"
+	"github.com/peergos/go-bitswap-auth/wantlist"
 )
 
 func mkFakeCid(s string) auth.Want {
@@ -297,7 +297,7 @@ func TestEntrySize(t *testing.T) {
 	c := blockGenerator.Next().Cid()
 	e := Entry{
 		Entry: wantlist.Entry{
-			Want:      auth.NewWant(c, "auth"),
+			Want:     auth.NewWant(c, "auth"),
 			Priority: 10,
 			WantType: pb.Message_Wantlist_Have,
 		},

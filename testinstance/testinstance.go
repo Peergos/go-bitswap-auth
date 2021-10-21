@@ -21,7 +21,7 @@ import (
 
 // NewTestInstanceGenerator generates a new InstanceGenerator for the given
 // testnet
-func NewTestInstanceGenerator(net tn.Network, netOptions []bsnet.NetOpt, bsOptions []bitswap.Option, allow func(cid.Cid, peer.ID, string) bool) InstanceGenerator {
+func NewTestInstanceGenerator(net tn.Network, netOptions []bsnet.NetOpt, bsOptions []bitswap.Option, allowGen func(int) func(cid.Cid, peer.ID, string) bool) InstanceGenerator {
 	ctx, cancel := context.WithCancel(context.Background())
 	return InstanceGenerator{
 		net:        net,
@@ -30,7 +30,7 @@ func NewTestInstanceGenerator(net tn.Network, netOptions []bsnet.NetOpt, bsOptio
 		cancel:     cancel,
 		bsOptions:  bsOptions,
 		netOptions: netOptions,
-		allow:      allow,
+		allowGen:   allowGen,
 	}
 }
 
@@ -42,7 +42,7 @@ type InstanceGenerator struct {
 	cancel     context.CancelFunc
 	bsOptions  []bitswap.Option
 	netOptions []bsnet.NetOpt
-	allow      func(cid.Cid, peer.ID, string) bool
+	allowGen   func(int) func(cid.Cid, peer.ID, string) bool
 }
 
 // Close closes the clobal context, shutting down all test instances
@@ -58,7 +58,7 @@ func (g *InstanceGenerator) Next() Instance {
 	if err != nil {
 		panic("FIXME") // TODO change signature
 	}
-	return NewInstance(g.ctx, g.net, p, g.netOptions, g.bsOptions, g.allow)
+	return NewInstance(g.ctx, g.net, p, g.netOptions, g.bsOptions, g.allowGen(g.seq-1))
 }
 
 // Instances creates N test instances of bitswap + dependencies and connects

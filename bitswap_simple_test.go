@@ -20,11 +20,13 @@ func TestSimpleBlockExchangeWithAuth(t *testing.T) {
 	invalid_auth := ""                                      //assuming that the empty string is always invalid; otherwise, do something else
 	valid_auth := "someauth"                                //get or calculate an auth string
 
-	allow := func(c cid.Cid, p peer.ID, a string) bool {
-		fmt.Println("Allow", c, a)
-		return a == valid_auth
+	allowGen := func(i int) func(cid.Cid, peer.ID, string) bool {
+		return func(c cid.Cid, p peer.ID, a string) bool {
+			fmt.Println("Allow-", i, c, a)
+			return a == valid_auth
+		}
 	}
-	ig := testinstance.NewTestInstanceGenerator(tn.VirtualNetwork(mockrouting.NewServer(), delay.Fixed(0)), nil, nil, allow)
+	ig := testinstance.NewTestInstanceGenerator(tn.VirtualNetwork(mockrouting.NewServer(), delay.Fixed(0)), nil, nil, allowGen)
 	my_instances := ig.Instances(2)
 	my_instances[0].Blockstore().Put(auth.NewBlock(my_block))
 

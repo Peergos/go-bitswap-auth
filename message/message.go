@@ -429,7 +429,7 @@ func FromMsgReader(r msgio.Reader) (BitSwapMessage, error) {
 }
 
 func (m *impl) ToProtoV0() *pb.Message {
-fmt.Println("ToProtoV1")
+	fmt.Println("ToProtoV1")
 	pbm := new(pb.Message)
 	pbm.Wantlist.Entries = make([]pb.Message_Wantlist_Entry, 0, len(m.wantlist))
 	for _, e := range m.wantlist {
@@ -446,7 +446,7 @@ fmt.Println("ToProtoV1")
 }
 
 func (m *impl) ToProtoV1() *pb.Message {
-fmt.Println("ToProtoV1")
+	fmt.Println("ToProtoV1")
 	pbm := new(pb.Message)
 	pbm.Wantlist.Entries = make([]pb.Message_Wantlist_Entry, 0, len(m.wantlist))
 	for _, e := range m.wantlist {
@@ -487,7 +487,7 @@ func (m *impl) ToNetV1(w io.Writer) error {
 }
 
 func write(w io.Writer, m *pb.Message) error {
-fmt.Println("message.write()")
+	fmt.Println("message.write()")
 	size := m.Size()
 
 	buf := pool.Get(size + binary.MaxVarintLen64)

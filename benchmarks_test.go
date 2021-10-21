@@ -153,8 +153,10 @@ func BenchmarkFetchFromOldBitswap(b *testing.B) {
 			oldProtocol := []protocol.ID{bsnet.ProtocolBitswapOneOne}
 			oldNetOpts := []bsnet.NetOpt{bsnet.SupportedProtocols(oldProtocol)}
 			oldBsOpts := []bitswap.Option{bitswap.SetSendDontHaves(false)}
-			allow := func(c cid.Cid, p peer.ID, a string) bool {
-				return true
+			allow := func(i int) func(cid.Cid, peer.ID, string) bool {
+				return func(c cid.Cid, p peer.ID, a string) bool {
+					return true
+				}
 			}
 			oldNodeGenerator := testinstance.NewTestInstanceGenerator(net, oldNetOpts, oldBsOpts, allow)
 
@@ -301,8 +303,10 @@ func BenchmarkDatacenterMultiLeechMultiSeed(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			net := tn.RateLimitedVirtualNetwork(mockrouting.NewServer(), d, rateLimitGenerator)
 
-			allow := func(c cid.Cid, p peer.ID, a string) bool {
-				return true
+			allow := func(i int) func(cid.Cid, peer.ID, string) bool {
+				return func(c cid.Cid, p peer.ID, a string) bool {
+					return true
+				}
 			}
 			ig := testinstance.NewTestInstanceGenerator(net, nil, nil, allow)
 			defer ig.Close()
@@ -322,9 +326,12 @@ func subtestDistributeAndFetch(b *testing.B, numnodes, numblks int, d delay.D, b
 	for i := 0; i < b.N; i++ {
 		net := tn.VirtualNetwork(mockrouting.NewServer(), d)
 
-		allow := func(c cid.Cid, p peer.ID, a string) bool {
-			return true
+		allow := func(i int) func(cid.Cid, peer.ID, string) bool {
+			return func(c cid.Cid, p peer.ID, a string) bool {
+				return true
+			}
 		}
+
 		ig := testinstance.NewTestInstanceGenerator(net, nil, nil, allow)
 
 		instances := ig.Instances(numnodes)
@@ -340,8 +347,10 @@ func subtestDistributeAndFetchRateLimited(b *testing.B, numnodes, numblks int, d
 	for i := 0; i < b.N; i++ {
 		net := tn.RateLimitedVirtualNetwork(mockrouting.NewServer(), d, rateLimitGenerator)
 
-		allow := func(c cid.Cid, p peer.ID, a string) bool {
-			return true
+		allow := func(i int) func(cid.Cid, peer.ID, string) bool {
+			return func(c cid.Cid, p peer.ID, a string) bool {
+				return true
+			}
 		}
 		ig := testinstance.NewTestInstanceGenerator(net, nil, nil, allow)
 		defer ig.Close()

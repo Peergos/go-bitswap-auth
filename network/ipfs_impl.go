@@ -407,7 +407,7 @@ func (bsnet *impl) handleNewStream(s network.Stream) {
 	for {
 		received, err := bsmsg.FromMsgReader(reader)
 		if err != nil {
-                fmt.Println(err)
+			fmt.Println(err)
 			if err != io.EOF {
 				_ = s.Reset()
 				bsnet.receiver.ReceiveError(err)
