@@ -3,6 +3,7 @@ package getter
 import (
 	"context"
 	"errors"
+        "fmt"
 
 	blocks "github.com/ipfs/go-block-format"
 	cid "github.com/ipfs/go-cid"
@@ -40,10 +41,11 @@ func SyncGetBlock(p context.Context, w auth.Want, gb GetBlocksFunc) (blocks.Bloc
 	if err != nil {
 		return nil, err
 	}
-
+fmt.Println("sync getter.GetBlock()")
 	select {
 	case block, ok := <-promise:
 		if !ok {
+                fmt.Println("Error", ok)
 			select {
 			case <-ctx.Done():
 				return nil, ctx.Err()
@@ -113,6 +115,7 @@ func handleIncoming(ctx context.Context, sessctx context.Context, remaining *cid
 	for {
 		select {
 		case blk, ok := <-in:
+                fmt.Println("getter.handleIncoming: Got a block", blk, ok)
 			// If the channel is closed, we're done (note that PubSub closes
 			// the channel once all the keys have been received)
 			if !ok {

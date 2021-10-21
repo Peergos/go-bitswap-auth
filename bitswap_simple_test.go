@@ -59,7 +59,8 @@ func TestSimpleBlockExchangeWithAuth(t *testing.T) {
 	fmt.Println("This is hanging because it never sends a response block...")
 	received_block, err := my_instances[1].Exchange.GetBlock(context.Background(), auth.NewWant(my_block.Cid(), valid_auth))
 	if err != nil {
-		t.Fatal(err)
+        panic(err)
+		//t.Fatal(err)
 	} else if my_block.Cid() != received_block.Cid() {
 		t.Fatal("expected to receive a block with the same CID that I requested")
 	}

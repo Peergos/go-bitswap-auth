@@ -3,6 +3,7 @@ package session
 import (
 	"context"
 	"time"
+        "fmt"
 
 	blocks "github.com/ipfs/go-block-format"
 	cid "github.com/ipfs/go-cid"
@@ -239,9 +240,10 @@ func (s *Session) GetBlock(parent context.Context, w auth.Want) (blocks.Block, e
 // guaranteed on the returned blocks.
 func (s *Session) GetBlocks(ctx context.Context, wants []auth.Want) (<-chan blocks.Block, error) {
 	ctx = logging.ContextWithLoggable(ctx, s.uuid)
-
+fmt.Println("session.GetBlocks()")
 	return bsgetter.AsyncGetBlocks(ctx, s.ctx, wants, s.notif,
 		func(ctx context.Context, wants []auth.Want) {
+                fmt.Println("session results")
 			select {
 			case s.incoming <- op{op: opWant, wants: wants}:
 			case <-ctx.Done():
@@ -249,6 +251,8 @@ func (s *Session) GetBlocks(ctx context.Context, wants []auth.Want) (<-chan bloc
 			}
 		},
 		func(keys []cid.Cid) {
+                fmt.Println("session cancelling requested wants")
+                panic("session cancelled")
 			select {
 			case s.incoming <- op{op: opCancel, keys: keys}:
 			case <-s.ctx.Done():
