@@ -9,8 +9,6 @@ import (
 
 	"github.com/google/uuid"
 
-	blocks "github.com/ipfs/go-block-format"
-	"github.com/ipfs/go-cid"
 	logging "github.com/ipfs/go-log"
 	"github.com/ipfs/go-metrics-interface"
 	"github.com/ipfs/go-peertaskqueue"
@@ -646,7 +644,7 @@ func (e *Engine) splitWantsCancels(es []bsmsg.Entry) ([]bsmsg.Entry, []bsmsg.Ent
 // the blocks to them.
 //
 // This function also updates the receive side of the ledger.
-func (e *Engine) ReceiveFrom(from peer.ID, blks []blocks.Block) {
+func (e *Engine) ReceiveFrom(from peer.ID, blks []auth.AuthBlock) {
 	if len(blks) == 0 {
 		return
 	}
@@ -657,99 +655,96 @@ func (e *Engine) ReceiveFrom(from peer.ID, blks []blocks.Block) {
 
 		// Record how many bytes were received in the ledger
 		for _, blk := range blks {
-			log.Debugw("Bitswap engine <- block", "local", e.self, "from", from, "cid", blk.Cid(), "size", len(blk.RawData()))
-			e.scoreLedger.AddToReceivedBytes(l.Partner, len(blk.RawData()))
+			log.Debugw("Bitswap engine <- block", "local", e.self, "from", from, "cid", blk.Cid(), "size", blk.Size())
+			e.scoreLedger.AddToReceivedBytes(l.Partner, blk.Size())
 		}
 
 		l.lk.Unlock()
 	}
 
 	// Get the size of each block
-	blockSizes := make(map[cid.Cid]int, len(blks))
+	blockSizes := make(map[auth.Want]int, len(blks))
 	for _, blk := range blks {
-		blockSizes[blk.Cid()] = len(blk.RawData())
+		blockSizes[blk.Want] = blk.Size()
 	}
 
-	// Don't do any of this for because it bypasses auth
-	/*
-		// Check each peer to see if it wants one of the blocks we received
-		var work bool
-		missingWants := make(map[peer.ID][]cid.Cid)
-		e.lock.RLock()
-		for _, b := range blks {
-			k := b.Cid()
+	// Check each peer to see if it wants one of the blocks we received
+	var work bool
+	missingWants := make(map[peer.ID][]auth.Want)
+	e.lock.RLock()
+	for _, b := range blks {
+		w := b.Want
 
-			for _, p := range e.peerLedger.Peers(k) {
-				ledger, ok := e.ledgerMap[p]
-				if !ok {
-					// This can happen if the peer has disconnected while we're processing this list.
-					log.Debugw("failed to find peer in ledger", "peer", p)
-					missingWants[p] = append(missingWants[p], k)
-					continue
-				}
+		for _, p := range e.peerLedger.Peers(w) {
+			ledger, ok := e.ledgerMap[p]
+			if !ok {
+				// This can happen if the peer has disconnected while we're processing this list.
+				log.Debugw("failed to find peer in ledger", "peer", p)
+				missingWants[p] = append(missingWants[p], w)
+				continue
+			}
+			ledger.lk.RLock()
+			entry, ok := ledger.WantListContains(w)
+			ledger.lk.RUnlock()
+			if !ok {
+				// This can happen if the peer has canceled their want while we're processing this message.
+				log.Debugw("wantlist index doesn't match peer's wantlist", "peer", p)
+				missingWants[p] = append(missingWants[p], w)
+				continue
+			}
+			work = true
+
+			blockSize := blockSizes[w]
+			isWantBlock := e.sendAsBlock(entry.WantType, blockSize)
+
+			entrySize := blockSize
+			if !isWantBlock {
+				entrySize = bsmsg.BlockPresenceSize(w)
+			}
+
+			e.peerRequestQueue.PushTasks(p, peertask.Task{
+				Topic:    entry.Want,
+				Priority: int(entry.Priority),
+				Work:     entrySize,
+				Data: &taskData{
+					BlockSize:    blockSize,
+					HaveBlock:    true,
+					IsWantBlock:  isWantBlock,
+					SendDontHave: false,
+				},
+			})
+			e.updateMetrics()
+		}
+	}
+	e.lock.RUnlock()
+
+	// If we found missing wants (e.g., because the peer disconnected, we have some races here)
+	// remove them from the list. Unfortunately, we still have to re-check because the user
+	// could have re-connected in the meantime.
+	if len(missingWants) > 0 {
+		e.lock.Lock()
+		for p, wl := range missingWants {
+			if ledger, ok := e.ledgerMap[p]; ok {
 				ledger.lk.RLock()
-				entry, ok := ledger.WantListContains(k)
+				for _, w := range wl {
+					if _, has := ledger.WantListContains(w); has {
+						continue
+					}
+					e.peerLedger.CancelWant(p, w)
+				}
 				ledger.lk.RUnlock()
-				if !ok {
-					// This can happen if the peer has canceled their want while we're processing this message.
-					log.Debugw("wantlist index doesn't match peer's wantlist", "peer", p)
-					missingWants[p] = append(missingWants[p], k)
-					continue
-				}
-				work = true
-
-				blockSize := blockSizes[k]
-				isWantBlock := e.sendAsBlock(entry.WantType, blockSize)
-
-				entrySize := blockSize
-				if !isWantBlock {
-					entrySize = bsmsg.BlockPresenceSize(k)
-				}
-
-				e.peerRequestQueue.PushTasks(p, peertask.Task{
-					Topic:    entry.Cid,
-					Priority: int(entry.Priority),
-					Work:     entrySize,
-					Data: &taskData{
-						BlockSize:    blockSize,
-						HaveBlock:    true,
-						IsWantBlock:  isWantBlock,
-						SendDontHave: false,
-					},
-				})
-				e.updateMetrics()
-			}
-		}
-		e.lock.RUnlock()
-
-		// If we found missing wants (e.g., because the peer disconnected, we have some races here)
-		// remove them from the list. Unfortunately, we still have to re-check because the user
-		// could have re-connected in the meantime.
-		if len(missingWants) > 0 {
-			e.lock.Lock()
-			for p, wl := range missingWants {
-				if ledger, ok := e.ledgerMap[p]; ok {
-					ledger.lk.RLock()
-					for _, k := range wl {
-						if _, has := ledger.WantListContains(k); has {
-							continue
-						}
-						e.peerLedger.CancelWant(p, k)
-					}
-					ledger.lk.RUnlock()
-				} else {
-					for _, k := range wl {
-						e.peerLedger.CancelWant(p, k)
-					}
+			} else {
+				for _, w := range wl {
+					e.peerLedger.CancelWant(p, w)
 				}
 			}
-			e.lock.Unlock()
 		}
+		e.lock.Unlock()
+	}
 
-		if work {
-			e.signalNewWork()
-		}
-	*/
+	if work {
+		e.signalNewWork()
+	}
 }
 
 // TODO add contents of m.WantList() to my local wantlist? NB: could introduce

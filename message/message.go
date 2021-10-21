@@ -3,6 +3,7 @@ package message
 import (
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"io"
 	"strings"
 
@@ -202,6 +203,7 @@ func (m *impl) Reset(full bool) {
 var errCidMissing = errors.New("missing cid")
 
 func newMessageFromProto(pbm pb.Message) (BitSwapMessage, error) {
+	fmt.Println("messageFromProto")
 	m := newMsg(pbm.Wantlist.Full)
 	for _, e := range pbm.Wantlist.Entries {
 		if !e.Block.Cid.Defined() {
@@ -358,6 +360,7 @@ func (m *impl) addEntry(w auth.Want, priority int32, cancel bool, wantType pb.Me
 }
 
 func (m *impl) AddBlock(b blocks.Block, a string) {
+	fmt.Println("AddBlock ", b.Cid(), a)
 	w := auth.Want{Cid: b.Cid(), Auth: a}
 	delete(m.blockPresences, w)
 	m.blocks[w] = auth.NewBlock(b)
@@ -455,6 +458,7 @@ func (m *impl) ToProtoV1() *pb.Message {
 		pbm.Payload = append(pbm.Payload, pb.Message_Block{
 			Data:   m.rawData[c],
 			Prefix: b.Cid().Prefix().Bytes(),
+			Auth:   b.Want.Auth,
 		})
 	}
 
