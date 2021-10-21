@@ -15,7 +15,7 @@ import (
 	pb "github.com/peergos/go-bitswap-auth/message/pb"
 	bsnet "github.com/peergos/go-bitswap-auth/network"
 	tn "github.com/peergos/go-bitswap-auth/testnet"
-
+        "github.com/peergos/go-bitswap-auth/auth"
 	"github.com/libp2p/go-libp2p-core/host"
 	"github.com/libp2p/go-libp2p-core/network"
 	"github.com/libp2p/go-libp2p-core/peer"
@@ -204,8 +204,8 @@ func TestMessageSendAndReceive(t *testing.T) {
 	block1 := blockGenerator.Next()
 	block2 := blockGenerator.Next()
 	sent := bsmsg.New(false)
-	sent.AddEntry(block1.Cid(), 1, pb.Message_Wantlist_Block, true)
-	sent.AddBlock(block2)
+	sent.AddEntry(auth.NewWant(block1.Cid(), "auth"), 1, pb.Message_Wantlist_Block, true)
+	sent.AddBlock(block2, "auth")
 
 	err = bsnet1.SendMessage(ctx, p2.ID(), sent)
 	if err != nil {
@@ -235,7 +235,7 @@ func TestMessageSendAndReceive(t *testing.T) {
 		t.Fatal("Did not add want to received message")
 	}
 	receivedWant := receivedWants[0]
-	if receivedWant.Cid != sentWant.Cid ||
+	if receivedWant.Want != sentWant.Want ||
 		receivedWant.Priority != sentWant.Priority ||
 		receivedWant.Cancel != sentWant.Cancel {
 		t.Fatal("Sent message wants did not match received message wants")
@@ -308,7 +308,7 @@ func prepareNetwork(t *testing.T, ctx context.Context, p1 tnet.Identity, r1 *rec
 	blockGenerator := blocksutil.NewBlockGenerator()
 	block1 := blockGenerator.Next()
 	msg := bsmsg.New(false)
-	msg.AddEntry(block1.Cid(), 1, pb.Message_Wantlist_Block, true)
+	msg.AddEntry(auth.NewWant(block1.Cid(), "auth"), 1, pb.Message_Wantlist_Block, true)
 
 	return eh1, bsnet1, eh2, bsnet2, msg
 }
