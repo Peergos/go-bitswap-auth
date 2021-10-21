@@ -363,7 +363,7 @@ func (m *impl) AddBlock(b blocks.Block, a string) {
 	fmt.Println("AddBlock ", b.Cid(), a)
 	w := auth.Want{Cid: b.Cid(), Auth: a}
 	delete(m.blockPresences, w)
-	m.blocks[w] = auth.NewBlock(b)
+	m.blocks[w] = auth.NewBlock(b, w)
 	m.rawData[w] = b.RawData()
 }
 

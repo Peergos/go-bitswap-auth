@@ -17,14 +17,15 @@ var blockGenerator = blocksutil.NewBlockGenerator()
 var prioritySeq int32
 
 // GenerateBlocksOfSize generates a series of blocks of the given byte size
-func GenerateBlocksOfSize(n int, size int64) []blocks.Block {
-	generatedBlocks := make([]blocks.Block, 0, n)
+func GenerateBlocksOfSize(n int, size int64) []auth.AuthBlock {
+	generatedBlocks := make([]auth.AuthBlock, 0, n)
 	for i := 0; i < n; i++ {
 		// rand.Read never errors
 		buf := make([]byte, size)
 		rand.Read(buf)
 		b := blocks.NewBlock(buf)
-		generatedBlocks = append(generatedBlocks, b)
+                a := auth.NewBlock(b, auth.NewWant(b.Cid(), "auth"))
+		generatedBlocks = append(generatedBlocks, a)
 
 	}
 	return generatedBlocks

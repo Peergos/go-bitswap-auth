@@ -89,7 +89,8 @@ func TestProviderForKeyButNetworkCannotFind(t *testing.T) { // TODO revisit this
 func TestGetBlockFromPeerAfterPeerAnnounces(t *testing.T) {
 
 	net := tn.VirtualNetwork(mockrouting.NewServer(), delay.Fixed(kNetworkDelay))
-	block := blocks.NewBlock([]byte("block"))
+        raw := blocks.NewBlock([]byte("block"))
+	block := auth.NewBlock(raw, auth.NewWant(raw.Cid(), "auth"))
 	ig := testinstance.NewTestInstanceGenerator(net, nil, nil, allowAll)
 	defer ig.Close()
 
@@ -97,7 +98,7 @@ func TestGetBlockFromPeerAfterPeerAnnounces(t *testing.T) {
 	hasBlock := peers[0]
 	defer hasBlock.Exchange.Close()
 
-	if err := hasBlock.Exchange.HasBlock(auth.NewBlock(block)); err != nil {
+	if err := hasBlock.Exchange.HasBlock(block); err != nil {
 		t.Fatal(err)
 	}
 
@@ -106,21 +107,22 @@ func TestGetBlockFromPeerAfterPeerAnnounces(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	received, err := wantsBlock.Exchange.GetBlock(ctx, auth.NewWant(block.Cid(), "auth"))
+	received, err := wantsBlock.Exchange.GetBlock(ctx, block.Want)
 	if err != nil {
 		t.Log(err)
 		t.Fatal("Expected to succeed")
 	}
 
-	if !bytes.Equal(block.RawData(), received.RawData()) {
+	if !bytes.Equal(raw.RawData(), received.RawData()) {
 		t.Fatal("Data doesn't match")
 	}
 }
 
 func TestDoesNotProvideWhenConfiguredNotTo(t *testing.T) {
 	net := tn.VirtualNetwork(mockrouting.NewServer(), delay.Fixed(kNetworkDelay))
-	block := blocks.NewBlock([]byte("block"))
-	bsOpts := []bitswap.Option{bitswap.ProvideEnabled(false), bitswap.ProviderSearchDelay(50 * time.Millisecond)}
+	raw := blocks.NewBlock([]byte("block"))
+	block := auth.NewBlock(raw, auth.NewWant(raw.Cid(), "auth"))
+        bsOpts := []bitswap.Option{bitswap.ProvideEnabled(false), bitswap.ProviderSearchDelay(50 * time.Millisecond)}
 	ig := testinstance.NewTestInstanceGenerator(net, nil, bsOpts, allowAll)
 	defer ig.Close()
 
@@ -130,7 +132,7 @@ func TestDoesNotProvideWhenConfiguredNotTo(t *testing.T) {
 	wantsBlock := ig.Next()
 	defer wantsBlock.Exchange.Close()
 
-	if err := hasBlock.Exchange.HasBlock(auth.NewBlock(block)); err != nil {
+	if err := hasBlock.Exchange.HasBlock(block); err != nil {
 		t.Fatal(err)
 	}
 
@@ -139,7 +141,7 @@ func TestDoesNotProvideWhenConfiguredNotTo(t *testing.T) {
 
 	ns := wantsBlock.Exchange.NewSession(ctx).(*bssession.Session)
 
-	received, err := ns.GetBlock(ctx, auth.NewWant(block.Cid(), "auth"))
+	received, err := ns.GetBlock(ctx, block.Want)
 	if received != nil {
 		t.Fatalf("Expected to find nothing, found %s", received)
 	}
@@ -154,9 +156,10 @@ func TestDoesNotProvideWhenConfiguredNotTo(t *testing.T) {
 func TestUnwantedBlockNotAdded(t *testing.T) {
 
 	net := tn.VirtualNetwork(mockrouting.NewServer(), delay.Fixed(kNetworkDelay))
-	block := blocks.NewBlock([]byte("block"))
+        raw := blocks.NewBlock([]byte("block"))
+	block := auth.NewBlock(raw, auth.NewWant(raw.Cid(), "auth"))
 	bsMessage := bsmsg.New(true)
-	bsMessage.AddBlock(block, "auth")
+	bsMessage.AddBlock(raw, "auth")
 
 	ig := testinstance.NewTestInstanceGenerator(net, nil, nil, allowAll)
 	defer ig.Close()
@@ -165,7 +168,7 @@ func TestUnwantedBlockNotAdded(t *testing.T) {
 	hasBlock := peers[0]
 	defer hasBlock.Exchange.Close()
 
-	if err := hasBlock.Exchange.HasBlock(auth.NewBlock(block)); err != nil {
+	if err := hasBlock.Exchange.HasBlock(block); err != nil {
 		t.Fatal(err)
 	}
 
@@ -309,7 +312,7 @@ func PerformDistributionTest(t *testing.T, numInstances, numBlocks int) {
 	first := instances[0]
 	for _, b := range blocks {
 		blkeys = append(blkeys, b.Cid())
-		err := first.Exchange.HasBlock(auth.NewBlock(b))
+		err := first.Exchange.HasBlock(auth.NewBlock(b, auth.NewWant(b.Cid(), "auth")))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -385,7 +388,7 @@ func TestSendToWantingPeer(t *testing.T) {
 	}
 
 	// peerB announces to the network that he has block alpha
-	err = peerB.Exchange.HasBlock(auth.NewBlock(alpha))
+	err = peerB.Exchange.HasBlock(auth.NewBlock(alpha, auth.NewWant(alpha.Cid(), "auth")))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -447,7 +450,7 @@ func TestBasicBitswap(t *testing.T) {
 	blocks := bg.Blocks(1)
 
 	// First peer has block
-	err := instances[0].Exchange.HasBlock(auth.NewBlock(blocks[0]))
+	err := instances[0].Exchange.HasBlock(auth.NewBlock(blocks[0], auth.NewWant(blocks[0].Cid(), "auth")))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -547,7 +550,7 @@ func TestDoubleGet(t *testing.T) {
 		t.Fatal("expected channel to be closed")
 	}
 
-	err = instances[0].Exchange.HasBlock(auth.NewBlock(blocks[0]))
+	err = instances[0].Exchange.HasBlock(auth.NewBlock(blocks[0], auth.NewWant(blocks[0].Cid(), "auth")))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -710,7 +713,7 @@ func TestBitswapLedgerOneWay(t *testing.T) {
 
 	instances := ig.Instances(2)
 	blocks := bg.Blocks(1)
-	err := instances[0].Exchange.HasBlock(auth.NewBlock(blocks[0]))
+	err := instances[0].Exchange.HasBlock(auth.NewBlock(blocks[0], auth.NewWant(blocks[0].Cid(), "auth")))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -762,12 +765,12 @@ func TestBitswapLedgerTwoWay(t *testing.T) {
 
 	instances := ig.Instances(2)
 	blocks := bg.Blocks(2)
-	err := instances[0].Exchange.HasBlock(auth.NewBlock(blocks[0]))
+	err := instances[0].Exchange.HasBlock(auth.NewBlock(blocks[0], auth.NewWant(blocks[0].Cid(), "auth")))
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	err = instances[1].Exchange.HasBlock(auth.NewBlock(blocks[1]))
+	err = instances[1].Exchange.HasBlock(auth.NewBlock(blocks[1], auth.NewWant(blocks[1].Cid(), "auth")))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -913,7 +916,7 @@ func TestTracer(t *testing.T) {
 	bitswap.WithTracer(wiretap)(instances[0].Exchange)
 
 	// First peer has block
-	err := instances[0].Exchange.HasBlock(auth.NewBlock(blocks[0]))
+	err := instances[0].Exchange.HasBlock(auth.NewBlock(blocks[0], auth.NewWant(blocks[0].Cid(), "auth")))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -997,7 +1000,7 @@ func TestTracer(t *testing.T) {
 	// After disabling WireTap, no new messages are logged
 	bitswap.WithTracer(nil)(instances[0].Exchange)
 
-	err = instances[0].Exchange.HasBlock(auth.NewBlock(blocks[1]))
+	err = instances[0].Exchange.HasBlock(auth.NewBlock(blocks[1], auth.NewWant(blocks[1].Cid(), "auth")))
 	if err != nil {
 		t.Fatal(err)
 	}

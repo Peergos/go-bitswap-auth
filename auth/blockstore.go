@@ -73,8 +73,11 @@ func (a AuthBlock) Loggable() map[string]interface{} {
 	return map[string]interface{}{}
 }
 
-func NewBlock(block blocks.Block) AuthBlock {
-	return AuthBlock{block: block}
+func NewBlock(block blocks.Block, w Want) AuthBlock {
+        if (block.Cid() != w.Cid) {
+           panic("want doesn't match block!")
+           }
+	return AuthBlock{block: block, Want: w}
 }
 
 type AuthedBlockstore struct {

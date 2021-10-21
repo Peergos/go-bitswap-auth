@@ -28,7 +28,7 @@ func TestSimpleBlockExchangeWithAuth(t *testing.T) {
 	}
 	ig := testinstance.NewTestInstanceGenerator(tn.VirtualNetwork(mockrouting.NewServer(), delay.Fixed(0)), nil, nil, allowGen)
 	my_instances := ig.Instances(2)
-	my_instances[0].Blockstore().Put(auth.NewBlock(my_block))
+	my_instances[0].Blockstore().Put(auth.NewBlock(my_block, auth.NewWant(my_block.Cid(), valid_auth)))
 
 	//test auth.blockstore; expect that the blockstore of instance[0] has my_block
 	has_block, err := my_instances[0].Blockstore().Has(my_block.Cid())
