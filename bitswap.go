@@ -485,7 +485,7 @@ func (bs *Bitswap) receiveBlocksFrom(ctx context.Context, from peer.ID, blks []a
 
 	// Send wanted blocks to decision engine
 	// N.B. ReceiveFrom is disabled because it bypasses auth
-	//bs.engine.ReceiveFrom(from, wanted)
+	bs.engine.ReceiveFrom(from, wanted)
 
 	// Publish the block to any Bitswap clients that had requested blocks.
 	// (the sessions use this pubsub mechanism to inform clients of incoming
