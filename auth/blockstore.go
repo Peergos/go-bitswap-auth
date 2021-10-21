@@ -48,6 +48,10 @@ func (w Want) Defined() bool {
 	return w.Cid.Defined()
 }
 
+func (w Want) Equals(b Want) bool {
+	return w.Cid.Equals(b.Cid) && w.Auth == b.Auth
+}
+
 func NewWant(c cid.Cid, a string) Want {
 	return Want{Cid: c, Auth: a}
 }

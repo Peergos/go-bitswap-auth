@@ -407,6 +407,7 @@ func (bsnet *impl) handleNewStream(s network.Stream) {
 	for {
 		received, err := bsmsg.FromMsgReader(reader)
 		if err != nil {
+                fmt.Println(err)
 			if err != io.EOF {
 				_ = s.Reset()
 				bsnet.receiver.ReceiveError(err)
@@ -417,6 +418,7 @@ func (bsnet *impl) handleNewStream(s network.Stream) {
 
 		p := s.Conn().RemotePeer()
 		ctx := context.Background()
+		fmt.Println("bitswap net handleNewStream from %s", s.Conn().RemotePeer(), received)
 		log.Debugf("bitswap net handleNewStream from %s", s.Conn().RemotePeer())
 		bsnet.connectEvtMgr.OnMessage(s.Conn().RemotePeer())
 		atomic.AddUint64(&bsnet.stats.MessagesRecvd, 1)
