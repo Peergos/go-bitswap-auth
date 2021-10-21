@@ -190,6 +190,8 @@ func (s *Session) Shutdown() {
 
 // ReceiveFrom receives incoming blocks from the given peer.
 func (s *Session) ReceiveFrom(from peer.ID, ks []auth.Want, haves []auth.Want, dontHaves []auth.Want) {
+fmt.Println("ReceiveFrom", from, ks, haves, dontHaves)
+panic("logggggg")
 	// The SessionManager tells each Session about all keys that it may be
 	// interested in. Here the Session filters the keys to the ones that this
 	// particular Session is interested in.
@@ -246,6 +248,7 @@ fmt.Println("session.GetBlocks()")
                 fmt.Println("session results")
 			select {
 			case s.incoming <- op{op: opWant, wants: wants}:
+                        fmt.Println("session channel incoming!", opWant)
 			case <-ctx.Done():
 			case <-s.ctx.Done():
 			}

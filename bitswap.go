@@ -463,7 +463,7 @@ func (bs *Bitswap) receiveBlocksFrom(ctx context.Context, from peer.ID, blks []a
 	// is waiting on a GetBlock for that object, they will receive a reference
 	// to the same node. We should address this soon, but i'm not going to do
 	// it now as it requires more thought and isnt causing immediate problems.
-
+fmt.Println("bitswap.receiveBlocksFrom", blks)
 	allKs := make([]auth.Want, 0, len(blks))
 	for _, b := range blks {
 		allKs = append(allKs, b.Want)
@@ -478,15 +478,14 @@ func (bs *Bitswap) receiveBlocksFrom(ctx context.Context, from peer.ID, blks []a
 		combined = append(combined, dontHaves...)
 		bs.pm.ResponseReceived(from, combined)
 	}
-
+fmt.Println("bitswap.receiveBlocksFrom2")
 	// Send all block keys (including duplicates) to any sessions that want them.
 	// (The duplicates are needed by sessions for accounting purposes)
 	bs.sm.ReceiveFrom(ctx, from, allKs, haves, dontHaves)
-
+fmt.Println("bitswap.receiveBlocksFrom3")
 	// Send wanted blocks to decision engine
-	// N.B. ReceiveFrom is disabled because it bypasses auth
 	bs.engine.ReceiveFrom(from, wanted)
-
+fmt.Println("bitswap.receiveBlocksFrom4")
 	// Publish the block to any Bitswap clients that had requested blocks.
 	// (the sessions use this pubsub mechanism to inform clients of incoming
 	// blocks)
