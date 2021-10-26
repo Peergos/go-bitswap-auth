@@ -24,7 +24,7 @@ func GenerateBlocksOfSize(n int, size int64) []auth.AuthBlock {
 		buf := make([]byte, size)
 		rand.Read(buf)
 		b := blocks.NewBlock(buf)
-                a := auth.NewBlock(b, auth.NewWant(b.Cid(), "auth"))
+		a := auth.NewBlock(b, auth.NewWant(b.Cid(), "auth"))
 		generatedBlocks = append(generatedBlocks, a)
 
 	}

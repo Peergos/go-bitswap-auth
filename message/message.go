@@ -269,7 +269,6 @@ func (m *impl) Wantlist() []Entry {
 }
 
 func (m *impl) Blocks() []auth.AuthBlock {
-fmt.Println("message.Blocks()")
 	bs := make([]auth.AuthBlock, 0, len(m.blocks))
 	for _, block := range m.blocks {
 		bs = append(bs, block)
@@ -461,7 +460,7 @@ func (m *impl) ToProtoV1() *pb.Message {
 		pbm.Payload = append(pbm.Payload, pb.Message_Block{
 			Data:   m.rawData[c],
 			Prefix: b.Cid().Prefix().Bytes(),
-			Auth:   b.Want.Auth,
+			Auth:   b.Want().Auth,
 		})
 	}
 

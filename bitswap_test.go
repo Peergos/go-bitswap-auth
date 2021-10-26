@@ -89,7 +89,7 @@ func TestProviderForKeyButNetworkCannotFind(t *testing.T) { // TODO revisit this
 func TestGetBlockFromPeerAfterPeerAnnounces(t *testing.T) {
 
 	net := tn.VirtualNetwork(mockrouting.NewServer(), delay.Fixed(kNetworkDelay))
-        raw := blocks.NewBlock([]byte("block"))
+	raw := blocks.NewBlock([]byte("block"))
 	block := auth.NewBlock(raw, auth.NewWant(raw.Cid(), "auth"))
 	ig := testinstance.NewTestInstanceGenerator(net, nil, nil, allowAll)
 	defer ig.Close()
@@ -107,13 +107,13 @@ func TestGetBlockFromPeerAfterPeerAnnounces(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	received, err := wantsBlock.Exchange.GetBlock(ctx, block.Want)
+	received, err := wantsBlock.Exchange.GetBlock(ctx, block.Want())
 	if err != nil {
 		t.Log(err)
 		t.Fatal("Expected to succeed")
 	}
 
-	if !bytes.Equal(raw.RawData(), received.RawData()) {
+	if !bytes.Equal(raw.RawData(), received.GetAuthedData()) {
 		t.Fatal("Data doesn't match")
 	}
 }
@@ -122,7 +122,7 @@ func TestDoesNotProvideWhenConfiguredNotTo(t *testing.T) {
 	net := tn.VirtualNetwork(mockrouting.NewServer(), delay.Fixed(kNetworkDelay))
 	raw := blocks.NewBlock([]byte("block"))
 	block := auth.NewBlock(raw, auth.NewWant(raw.Cid(), "auth"))
-        bsOpts := []bitswap.Option{bitswap.ProvideEnabled(false), bitswap.ProviderSearchDelay(50 * time.Millisecond)}
+	bsOpts := []bitswap.Option{bitswap.ProvideEnabled(false), bitswap.ProviderSearchDelay(50 * time.Millisecond)}
 	ig := testinstance.NewTestInstanceGenerator(net, nil, bsOpts, allowAll)
 	defer ig.Close()
 
@@ -141,7 +141,7 @@ func TestDoesNotProvideWhenConfiguredNotTo(t *testing.T) {
 
 	ns := wantsBlock.Exchange.NewSession(ctx).(*bssession.Session)
 
-	received, err := ns.GetBlock(ctx, block.Want)
+	received, err := ns.GetBlock(ctx, block.Want())
 	if received != nil {
 		t.Fatalf("Expected to find nothing, found %s", received)
 	}
@@ -156,7 +156,7 @@ func TestDoesNotProvideWhenConfiguredNotTo(t *testing.T) {
 func TestUnwantedBlockNotAdded(t *testing.T) {
 
 	net := tn.VirtualNetwork(mockrouting.NewServer(), delay.Fixed(kNetworkDelay))
-        raw := blocks.NewBlock([]byte("block"))
+	raw := blocks.NewBlock([]byte("block"))
 	block := auth.NewBlock(raw, auth.NewWant(raw.Cid(), "auth"))
 	bsMessage := bsmsg.New(true)
 	bsMessage.AddBlock(raw, "auth")
@@ -494,14 +494,14 @@ func TestBasicBitswap(t *testing.T) {
 	}
 
 	t.Log("stat node 0")
-	assertStat(t, st0, 1, 0, uint64(len(blk.RawData())), 0)
+	assertStat(t, st0, 1, 0, uint64(len(blk.GetAuthedData())), 0)
 	t.Log("stat node 1")
-	assertStat(t, st1, 0, 1, 0, uint64(len(blk.RawData())))
+	assertStat(t, st1, 0, 1, 0, uint64(len(blk.GetAuthedData())))
 	t.Log("stat node 2")
 	assertStat(t, st2, 0, 0, 0, 0)
 
-	if !bytes.Equal(blk.RawData(), blocks[0].RawData()) {
-		t.Errorf("blocks aren't equal: expected %v, actual %v", blocks[0].RawData(), blk.RawData())
+	if !bytes.Equal(blk.GetAuthedData(), blocks[0].RawData()) {
+		t.Errorf("blocks aren't equal: expected %v, actual %v", blocks[0].RawData(), blk.GetAuthedData())
 	}
 
 	t.Log(blk)

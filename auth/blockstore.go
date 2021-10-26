@@ -56,28 +56,44 @@ func NewWant(c cid.Cid, a string) Want {
 	return Want{Cid: c, Auth: a}
 }
 
-type AuthBlock struct {
-	Want  Want
+type AuthBlock interface {
+	Want() Want
+	Cid() cid.Cid
+	Size() int
+	GetAuthedData() []byte
+	Loggable() map[string]interface{}
+}
+
+type AuthBlockImpl struct {
+	want  Want
 	block blocks.Block
 }
 
-func (a AuthBlock) Cid() cid.Cid {
+func (a AuthBlockImpl) Cid() cid.Cid {
 	return a.block.Cid()
 }
 
-func (a AuthBlock) Size() int {
+func (a AuthBlockImpl) Want() Want {
+	return a.want
+}
+
+func (a AuthBlockImpl) Size() int {
 	return len(a.block.RawData())
 }
 
-func (a AuthBlock) Loggable() map[string]interface{} {
+func (a AuthBlockImpl) GetAuthedData() []byte {
+	return a.block.RawData()
+}
+
+func (a AuthBlockImpl) Loggable() map[string]interface{} {
 	return map[string]interface{}{}
 }
 
 func NewBlock(block blocks.Block, w Want) AuthBlock {
-        if (block.Cid() != w.Cid) {
-           panic("want doesn't match block!")
-           }
-	return AuthBlock{block: block, Want: w}
+	if block.Cid() != w.Cid {
+		panic("want doesn't match block!")
+	}
+	return AuthBlockImpl{block: block, want: w}
 }
 
 type AuthedBlockstore struct {
@@ -110,13 +126,13 @@ func (bs *AuthedBlockstore) GetSize(c cid.Cid) (int, error) {
 }
 
 func (bs *AuthedBlockstore) Put(b AuthBlock) error {
-	return bs.source.Put(b.block)
+	return bs.source.Put(b.(AuthBlockImpl).block)
 }
 
 func (bs *AuthedBlockstore) PutMany(authblocks []AuthBlock) error {
 	unwrapped := make([]blocks.Block, len(authblocks))
 	for i, b := range authblocks {
-		unwrapped[i] = b.block
+		unwrapped[i] = b.(AuthBlockImpl).block
 	}
 	return bs.source.PutMany(unwrapped)
 }

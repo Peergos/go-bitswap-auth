@@ -3,7 +3,6 @@ package sessionmanager
 import (
 	"context"
 	"sync"
-        "fmt"
 	"time"
 
 	delay "github.com/ipfs/go-ipfs-delay"
@@ -160,7 +159,6 @@ func (sm *SessionManager) ReceiveFrom(ctx context.Context, p peer.ID, blks []aut
 		sm.sessLk.RUnlock()
 
 		if ok {
-                fmt.Println("sessionmanager.receiveFrom found session for block")
 			sess.ReceiveFrom(p, blks, haves, dontHaves)
 		}
 	}

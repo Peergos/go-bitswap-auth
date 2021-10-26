@@ -147,7 +147,7 @@ func (sim *SessionInterestManager) SplitWantedUnwanted(blks []auth.AuthBlock) ([
 	// Get the wanted block keys as a set
 	wantedKs := auth.NewSet()
 	for _, b := range blks {
-		w := b.Want
+		w := b.Want()
 		// For each session that is interested in the key
 		for ses := range sim.wants[w] {
 			// If the session wants the key (rather than just being interested)
@@ -162,7 +162,7 @@ func (sim *SessionInterestManager) SplitWantedUnwanted(blks []auth.AuthBlock) ([
 	wantedBlks := make([]auth.AuthBlock, 0, len(blks))
 	notWantedBlks := make([]auth.AuthBlock, 0)
 	for _, b := range blks {
-		if wantedKs.Has(b.Want) {
+		if wantedKs.Has(b.Want()) {
 			wantedBlks = append(wantedBlks, b)
 		} else {
 			notWantedBlks = append(notWantedBlks, b)

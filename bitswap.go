@@ -12,7 +12,6 @@ import (
 
 	delay "github.com/ipfs/go-ipfs-delay"
 
-	blocks "github.com/ipfs/go-block-format"
 	"github.com/ipfs/go-cid"
 	logging "github.com/ipfs/go-log"
 	"github.com/ipfs/go-metrics-interface"
@@ -389,7 +388,7 @@ type counters struct {
 
 // GetBlock attempts to retrieve a particular block from peers within the
 // deadline enforced by the context.
-func (bs *Bitswap) GetBlock(parent context.Context, w auth.Want) (blocks.Block, error) {
+func (bs *Bitswap) GetBlock(parent context.Context, w auth.Want) (auth.AuthBlock, error) {
 	return bsgetter.SyncGetBlock(parent, w, bs.GetBlocks)
 }
 
@@ -416,7 +415,7 @@ func (bs *Bitswap) LedgerForPeer(p peer.ID) *decision.Receipt {
 // NB: Your request remains open until the context expires. To conserve
 // resources, provide a context with a reasonably short deadline (ie. not one
 // that lasts throughout the lifetime of the server)
-func (bs *Bitswap) GetBlocks(ctx context.Context, keys []auth.Want) (<-chan blocks.Block, error) {
+func (bs *Bitswap) GetBlocks(ctx context.Context, keys []auth.Want) (<-chan auth.AuthBlock, error) {
 	session := bs.sm.NewSession(ctx, bs.provSearchDelay, bs.rebroadcastDelay)
 	return session.GetBlocks(ctx, keys)
 }
@@ -432,7 +431,6 @@ func (bs *Bitswap) HasBlock(blk auth.AuthBlock) error {
 // In case you run `git blame` on this comment, I'll save you some time: ask
 // @whyrusleeping, I don't know the answers you seek.
 func (bs *Bitswap) receiveBlocksFrom(ctx context.Context, from peer.ID, blks []auth.AuthBlock, haves []auth.Want, dontHaves []auth.Want) error {
-fmt.Println("bitswap.receiveBlocksFrom")
 	select {
 	case <-bs.process.Closing():
 		return errors.New("bitswap is closed")
@@ -440,7 +438,6 @@ fmt.Println("bitswap.receiveBlocksFrom")
 	}
 
 	wanted := blks
-fmt.Println("bitswap.receiveBlocksFrom2", wanted)
 	// If blocks came from the network
 	if from != "" {
 		var notWanted []auth.AuthBlock
@@ -452,7 +449,6 @@ fmt.Println("bitswap.receiveBlocksFrom2", wanted)
 
 	// Put wanted blocks into blockstore
 	if len(wanted) > 0 {
-        fmt.Println("bitswap.receiveBlocksFrom-put in blockstore", wanted)
 		err := bs.blockstore.PutMany(wanted)
 		if err != nil {
 			log.Errorf("Error writing %d blocks to datastore: %s", len(wanted), err)
@@ -465,10 +461,9 @@ fmt.Println("bitswap.receiveBlocksFrom2", wanted)
 	// is waiting on a GetBlock for that object, they will receive a reference
 	// to the same node. We should address this soon, but i'm not going to do
 	// it now as it requires more thought and isnt causing immediate problems.
-fmt.Println("bitswap.receiveBlocksFrom", wanted)
 	allKs := make([]auth.Want, 0, len(blks))
 	for _, b := range blks {
-		allKs = append(allKs, b.Want)
+		allKs = append(allKs, b.Want())
 	}
 
 	// If the message came from the network
@@ -480,14 +475,14 @@ fmt.Println("bitswap.receiveBlocksFrom", wanted)
 		combined = append(combined, dontHaves...)
 		bs.pm.ResponseReceived(from, combined)
 	}
-fmt.Println("bitswap.receiveBlocksFrom2")
+
 	// Send all block keys (including duplicates) to any sessions that want them.
 	// (The duplicates are needed by sessions for accounting purposes)
 	bs.sm.ReceiveFrom(ctx, from, allKs, haves, dontHaves)
-fmt.Println("bitswap.receiveBlocksFrom3")
+
 	// Send wanted blocks to decision engine
 	bs.engine.ReceiveFrom(from, wanted)
-fmt.Println("bitswap.receiveBlocksFrom4")
+
 	// Publish the block to any Bitswap clients that had requested blocks.
 	// (the sessions use this pubsub mechanism to inform clients of incoming
 	// blocks)
@@ -534,7 +529,6 @@ func (bs *Bitswap) ReceiveMessage(ctx context.Context, p peer.ID, incoming bsmsg
 	}
 
 	iblocks := incoming.Blocks()
-        fmt.Println("bitswap.incoming block", iblocks)
 
 	if len(iblocks) > 0 {
 		bs.updateReceiveCounters(iblocks)

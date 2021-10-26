@@ -3,9 +3,7 @@ package session
 import (
 	"context"
 	"time"
-        "fmt"
 
-	blocks "github.com/ipfs/go-block-format"
 	cid "github.com/ipfs/go-cid"
 	delay "github.com/ipfs/go-ipfs-delay"
 	logging "github.com/ipfs/go-log"
@@ -190,8 +188,6 @@ func (s *Session) Shutdown() {
 
 // ReceiveFrom receives incoming blocks from the given peer.
 func (s *Session) ReceiveFrom(from peer.ID, ks []auth.Want, haves []auth.Want, dontHaves []auth.Want) {
-fmt.Println("ReceiveFrom", from, ks, haves, dontHaves)
-fmt.Println("sessions.receiveFrom", ks, haves, dontHaves)
 	// The SessionManager tells each Session about all keys that it may be
 	// interested in. Here the Session filters the keys to the ones that this
 	// particular Session is interested in.
@@ -200,7 +196,7 @@ fmt.Println("sessions.receiveFrom", ks, haves, dontHaves)
 	haves = interestedRes[1]
 	dontHaves = interestedRes[2]
 	s.logReceiveFrom(from, ks, haves, dontHaves)
-fmt.Println("sessions.receiveFrom2", ks, haves, dontHaves)
+
 	// Inform the session want sender that a message has been received
 	s.sws.Update(from, ks, haves, dontHaves)
 
@@ -233,29 +229,24 @@ func (s *Session) logReceiveFrom(from peer.ID, interestedKs []auth.Want, haves [
 }
 
 // GetBlock fetches a single block.
-func (s *Session) GetBlock(parent context.Context, w auth.Want) (blocks.Block, error) {
+func (s *Session) GetBlock(parent context.Context, w auth.Want) (auth.AuthBlock, error) {
 	return bsgetter.SyncGetBlock(parent, w, s.GetBlocks)
 }
 
 // GetBlocks fetches a set of blocks within the context of this session and
 // returns a channel that found blocks will be returned on. No order is
 // guaranteed on the returned blocks.
-func (s *Session) GetBlocks(ctx context.Context, wants []auth.Want) (<-chan blocks.Block, error) {
+func (s *Session) GetBlocks(ctx context.Context, wants []auth.Want) (<-chan auth.AuthBlock, error) {
 	ctx = logging.ContextWithLoggable(ctx, s.uuid)
-fmt.Println("session.GetBlocks()")
 	return bsgetter.AsyncGetBlocks(ctx, s.ctx, wants, s.notif,
 		func(ctx context.Context, wants []auth.Want) {
-                fmt.Println("session results")
 			select {
 			case s.incoming <- op{op: opWant, wants: wants}:
-                        fmt.Println("session channel incoming!", opWant)
 			case <-ctx.Done():
 			case <-s.ctx.Done():
 			}
 		},
 		func(keys []cid.Cid) {
-                fmt.Println("session cancelling requested wants")
-                panic("session cancelled")
 			select {
 			case s.incoming <- op{op: opCancel, keys: keys}:
 			case <-s.ctx.Done():
@@ -422,7 +413,6 @@ func (s *Session) handleShutdown() {
 
 // handleReceive is called when the session receives blocks from a peer
 func (s *Session) handleReceive(ks []auth.Want) {
-fmt.Println("session.handleReceive")
 	// Record which blocks have been received and figure out the total latency
 	// for fetching the blocks
 	wanted, totalLatency := s.sw.BlocksReceived(ks)

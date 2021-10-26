@@ -51,20 +51,18 @@ func TestSimpleBlockExchangeWithAuth(t *testing.T) {
 		t.Fatal("expected to retrieve the same block I stored")
 	}
 
-        _, err = my_instances[1].Blockstore().Get(my_block.Cid(), my_instances[0].Peer, invalid_auth)
+	_, err = my_instances[1].Blockstore().Get(my_block.Cid(), my_instances[0].Peer, invalid_auth)
 	if err == nil {
 		t.Fatal("Able to retrieve block from block store tht doesn't have it, using invalid auth string!")
 	}
 
-	fmt.Println("This is hanging because it never sends a response block...")
 	received_block, err := my_instances[1].Exchange.GetBlock(context.Background(), auth.NewWant(my_block.Cid(), valid_auth))
 	if err != nil {
-        panic(err)
-		//t.Fatal(err)
+		t.Fatal(err)
 	} else if my_block.Cid() != received_block.Cid() {
 		t.Fatal("expected to receive a block with the same CID that I requested")
 	}
-	fmt.Println("received_block=", string(received_block.RawData()[:]))
+	fmt.Println("received_block=", string(received_block.GetAuthedData()[:]))
 
 	fmt.Println("This is also hanging...")
 	//test that I only receive a block from a peer when I provide the correct auth string

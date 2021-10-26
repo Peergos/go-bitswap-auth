@@ -645,7 +645,6 @@ func (e *Engine) splitWantsCancels(es []bsmsg.Entry) ([]bsmsg.Entry, []bsmsg.Ent
 //
 // This function also updates the receive side of the ledger.
 func (e *Engine) ReceiveFrom(from peer.ID, blks []auth.AuthBlock) {
-fmt.Println("engine.ReceiveFrom", blks)
 	if len(blks) == 0 {
 		return
 	}
@@ -666,7 +665,7 @@ fmt.Println("engine.ReceiveFrom", blks)
 	// Get the size of each block
 	blockSizes := make(map[auth.Want]int, len(blks))
 	for _, blk := range blks {
-		blockSizes[blk.Want] = blk.Size()
+		blockSizes[blk.Want()] = blk.Size()
 	}
 
 	// Check each peer to see if it wants one of the blocks we received
@@ -674,12 +673,11 @@ fmt.Println("engine.ReceiveFrom", blks)
 	missingWants := make(map[peer.ID][]auth.Want)
 	e.lock.RLock()
 	for _, b := range blks {
-		w := b.Want
-fmt.Println("*** processing block, peers: ", e.peerLedger.Peers(w))
+		w := b.Want()
+
 		for _, p := range e.peerLedger.Peers(w) {
 			ledger, ok := e.ledgerMap[p]
 			if !ok {
-                        fmt.Println("*** processing block => ledger absent, bingo!")
 				// This can happen if the peer has disconnected while we're processing this list.
 				log.Debugw("failed to find peer in ledger", "peer", p)
 				missingWants[p] = append(missingWants[p], w)
@@ -689,14 +687,13 @@ fmt.Println("*** processing block, peers: ", e.peerLedger.Peers(w))
 			entry, ok := ledger.WantListContains(w)
 			ledger.lk.RUnlock()
 			if !ok {
-                        fmt.Println("*** processing block => unwanted block, bingo!")
 				// This can happen if the peer has canceled their want while we're processing this message.
 				log.Debugw("wantlist index doesn't match peer's wantlist", "peer", p)
 				missingWants[p] = append(missingWants[p], w)
 				continue
 			}
 			work = true
-fmt.Println("*** processing block => work!")
+
 			blockSize := blockSizes[w]
 			isWantBlock := e.sendAsBlock(entry.WantType, blockSize)
 
@@ -766,7 +763,7 @@ func (e *Engine) MessageSent(p peer.ID, m bsmsg.BitSwapMessage) {
 	// Remove sent blocks from the want list for the peer
 	for _, block := range m.Blocks() {
 		e.scoreLedger.AddToSentBytes(l.Partner, block.Size())
-		l.wantList.RemoveType(block.Want, pb.Message_Wantlist_Block)
+		l.wantList.RemoveType(block.Want(), pb.Message_Wantlist_Block)
 	}
 
 	// Remove sent block presences from the want list for the peer

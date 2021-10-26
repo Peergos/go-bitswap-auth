@@ -53,7 +53,7 @@ func TestBasicSessions(t *testing.T) {
 	}
 }
 
-func assertBlockLists(got, exp []blocks.Block) error {
+func assertBlockLists(got []auth.AuthBlock, exp []blocks.Block) error {
 	if len(got) != len(exp) {
 		return fmt.Errorf("got wrong number of blocks, %d != %d", len(got), len(exp))
 	}
@@ -107,7 +107,7 @@ func TestSessionBetweenPeers(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		var got []blocks.Block
+		var got []auth.AuthBlock
 		for b := range ch {
 			got = append(got, b)
 		}
@@ -164,7 +164,7 @@ func TestSessionSplitFetch(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		var got []blocks.Block
+		var got []auth.AuthBlock
 		for b := range ch {
 			got = append(got, b)
 		}
@@ -210,7 +210,7 @@ func TestFetchNotConnected(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	var got []blocks.Block
+	var got []auth.AuthBlock
 	for b := range ch {
 		got = append(got, b)
 	}
@@ -259,7 +259,7 @@ func TestFetchAfterDisconnect(t *testing.T) {
 	}
 
 	// Should get first 5 blocks
-	var got []blocks.Block
+	var got []auth.AuthBlock
 	for i := 0; i < 5; i++ {
 		b := <-ch
 		got = append(got, b)
