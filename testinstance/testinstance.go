@@ -64,12 +64,24 @@ func (g *InstanceGenerator) Next() Instance {
 // Instances creates N test instances of bitswap + dependencies and connects
 // them to each other
 func (g *InstanceGenerator) Instances(n int) []Instance {
+	return g.instances(n, true)
+}
+
+// Instances creates N test instances of bitswap + dependencies and connects
+// them to each other
+func (g *InstanceGenerator) UnconnectedInstances(n int) []Instance {
+	return g.instances(n, false)
+}
+
+func (g *InstanceGenerator) instances(n int, connect bool) []Instance {
 	var instances []Instance
 	for j := 0; j < n; j++ {
 		inst := g.Next()
 		instances = append(instances, inst)
 	}
-	ConnectInstances(instances)
+	if connect {
+		ConnectInstances(instances)
+	}
 	return instances
 }
 
