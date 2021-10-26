@@ -432,6 +432,7 @@ func (bs *Bitswap) HasBlock(blk auth.AuthBlock) error {
 // In case you run `git blame` on this comment, I'll save you some time: ask
 // @whyrusleeping, I don't know the answers you seek.
 func (bs *Bitswap) receiveBlocksFrom(ctx context.Context, from peer.ID, blks []auth.AuthBlock, haves []auth.Want, dontHaves []auth.Want) error {
+fmt.Println("bitswap.receiveBlocksFrom")
 	select {
 	case <-bs.process.Closing():
 		return errors.New("bitswap is closed")
@@ -439,7 +440,7 @@ func (bs *Bitswap) receiveBlocksFrom(ctx context.Context, from peer.ID, blks []a
 	}
 
 	wanted := blks
-
+fmt.Println("bitswap.receiveBlocksFrom2", wanted)
 	// If blocks came from the network
 	if from != "" {
 		var notWanted []auth.AuthBlock
@@ -451,6 +452,7 @@ func (bs *Bitswap) receiveBlocksFrom(ctx context.Context, from peer.ID, blks []a
 
 	// Put wanted blocks into blockstore
 	if len(wanted) > 0 {
+        fmt.Println("bitswap.receiveBlocksFrom-put in blockstore", wanted)
 		err := bs.blockstore.PutMany(wanted)
 		if err != nil {
 			log.Errorf("Error writing %d blocks to datastore: %s", len(wanted), err)
@@ -463,7 +465,7 @@ func (bs *Bitswap) receiveBlocksFrom(ctx context.Context, from peer.ID, blks []a
 	// is waiting on a GetBlock for that object, they will receive a reference
 	// to the same node. We should address this soon, but i'm not going to do
 	// it now as it requires more thought and isnt causing immediate problems.
-fmt.Println("bitswap.receiveBlocksFrom", blks)
+fmt.Println("bitswap.receiveBlocksFrom", wanted)
 	allKs := make([]auth.Want, 0, len(blks))
 	for _, b := range blks {
 		allKs = append(allKs, b.Want)
@@ -532,6 +534,7 @@ func (bs *Bitswap) ReceiveMessage(ctx context.Context, p peer.ID, incoming bsmsg
 	}
 
 	iblocks := incoming.Blocks()
+        fmt.Println("bitswap.incoming block", iblocks)
 
 	if len(iblocks) > 0 {
 		bs.updateReceiveCounters(iblocks)

@@ -269,6 +269,7 @@ func (m *impl) Wantlist() []Entry {
 }
 
 func (m *impl) Blocks() []auth.AuthBlock {
+fmt.Println("message.Blocks()")
 	bs := make([]auth.AuthBlock, 0, len(m.blocks))
 	for _, block := range m.blocks {
 		bs = append(bs, block)
@@ -360,7 +361,7 @@ func (m *impl) addEntry(w auth.Want, priority int32, cancel bool, wantType pb.Me
 }
 
 func (m *impl) AddBlock(b blocks.Block, a string) {
-	fmt.Println("AddBlock ", b.Cid(), a)
+	fmt.Println("message.AddBlock ", b.Cid(), a)
 	w := auth.Want{Cid: b.Cid(), Auth: a}
 	delete(m.blockPresences, w)
 	m.blocks[w] = auth.NewBlock(b, w)

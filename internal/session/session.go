@@ -191,7 +191,7 @@ func (s *Session) Shutdown() {
 // ReceiveFrom receives incoming blocks from the given peer.
 func (s *Session) ReceiveFrom(from peer.ID, ks []auth.Want, haves []auth.Want, dontHaves []auth.Want) {
 fmt.Println("ReceiveFrom", from, ks, haves, dontHaves)
-panic("logggggg")
+fmt.Println("sessions.receiveFrom", ks, haves, dontHaves)
 	// The SessionManager tells each Session about all keys that it may be
 	// interested in. Here the Session filters the keys to the ones that this
 	// particular Session is interested in.
@@ -200,7 +200,7 @@ panic("logggggg")
 	haves = interestedRes[1]
 	dontHaves = interestedRes[2]
 	s.logReceiveFrom(from, ks, haves, dontHaves)
-
+fmt.Println("sessions.receiveFrom2", ks, haves, dontHaves)
 	// Inform the session want sender that a message has been received
 	s.sws.Update(from, ks, haves, dontHaves)
 
@@ -422,6 +422,7 @@ func (s *Session) handleShutdown() {
 
 // handleReceive is called when the session receives blocks from a peer
 func (s *Session) handleReceive(ks []auth.Want) {
+fmt.Println("session.handleReceive")
 	// Record which blocks have been received and figure out the total latency
 	// for fetching the blocks
 	wanted, totalLatency := s.sw.BlocksReceived(ks)

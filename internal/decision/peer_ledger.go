@@ -1,6 +1,7 @@
 package decision
 
 import (
+"fmt"
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/peergos/go-bitswap-auth/auth"
 )
@@ -10,19 +11,23 @@ type peerLedger struct {
 }
 
 func newPeerLedger() *peerLedger {
+fmt.Println("peer_ledger.newPeerLedger")
 	return &peerLedger{cids: make(map[auth.Want]map[peer.ID]struct{})}
 }
 
 func (l *peerLedger) Wants(p peer.ID, k auth.Want) {
+fmt.Println("peer_ledger.Wants", p, k)
 	m, ok := l.cids[k]
 	if !ok {
 		m = make(map[peer.ID]struct{})
 		l.cids[k] = m
 	}
 	m[p] = struct{}{}
+        fmt.Println("**** peer_ledger.Wants-end", l.cids)
 }
 
 func (l *peerLedger) CancelWant(p peer.ID, k auth.Want) {
+fmt.Println("**** peer_ledger.CancelWant", k)
 	m, ok := l.cids[k]
 	if !ok {
 		return
@@ -34,6 +39,8 @@ func (l *peerLedger) CancelWant(p peer.ID, k auth.Want) {
 }
 
 func (l *peerLedger) Peers(k auth.Want) []peer.ID {
+fmt.Println("peer_ledger.Peers", k)
+fmt.Println("**** peer_ledger.cids", l.cids)
 	m, ok := l.cids[k]
 	if !ok {
 		return nil
@@ -42,5 +49,6 @@ func (l *peerLedger) Peers(k auth.Want) []peer.ID {
 	for p := range m {
 		peers = append(peers, p)
 	}
+        fmt.Println("peer_ledger.Peers =>", peers)
 	return peers
 }
