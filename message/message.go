@@ -360,7 +360,6 @@ func (m *impl) addEntry(w auth.Want, priority int32, cancel bool, wantType pb.Me
 }
 
 func (m *impl) AddBlock(b blocks.Block, a string) {
-	fmt.Println("message.AddBlock ", b.Cid(), a)
 	w := auth.Want{Cid: b.Cid(), Auth: a}
 	delete(m.blockPresences, w)
 	m.blocks[w] = auth.NewBlock(b, w)

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"time"
 
 	blocks "github.com/ipfs/go-block-format"
 	cid "github.com/ipfs/go-cid"
@@ -64,11 +65,11 @@ func TestSimpleBlockExchangeWithAuth(t *testing.T) {
 	}
 	fmt.Println("received_block=", string(received_block.GetAuthedData()[:]))
 
-	fmt.Println("This is also hanging...")
 	//test that I only receive a block from a peer when I provide the correct auth string
-	_, err = my_instances[1].Exchange.GetBlock(context.Background(), auth.NewWant(my_block.Cid(), invalid_auth))
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	_, err = my_instances[1].Exchange.GetBlock(ctx, auth.NewWant(my_block.Cid(), invalid_auth))
 	if err == nil {
 		t.Fatal("Peer released block upon receiving request containing an invalid auth string!")
 	}
-	fmt.Println("escaped hang!")
 }
