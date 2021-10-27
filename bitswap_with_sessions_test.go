@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	peer "github.com/libp2p/go-libp2p-core/peer"
 	blocks "github.com/ipfs/go-block-format"
 	cid "github.com/ipfs/go-cid"
 	blocksutil "github.com/ipfs/go-ipfs-blocksutil"
@@ -70,12 +71,19 @@ func assertBlockLists(got []auth.AuthBlock, exp []blocks.Block) error {
 	return nil
 }
 
+func allowAllLog(i int) func(cid.Cid, peer.ID, string) bool {
+	return func(c cid.Cid, p peer.ID, a string) bool {
+        fmt.Println("Allow", c, p, a)
+		return true
+	}
+}
+
 func TestSessionBetweenPeers(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	vnet := tn.VirtualNetwork(mockrouting.NewServer(), delay.Fixed(time.Millisecond))
-	ig := testinstance.NewTestInstanceGenerator(vnet, nil, []bitswap.Option{bitswap.SetSimulateDontHavesOnTimeout(false)}, allowAll)
+	ig := testinstance.NewTestInstanceGenerator(vnet, nil, []bitswap.Option{bitswap.SetSimulateDontHavesOnTimeout(false)}, allowAllLog)
 	defer ig.Close()
 	bgen := blocksutil.NewBlockGenerator()
 
@@ -99,9 +107,10 @@ func TestSessionBetweenPeers(t *testing.T) {
 	}
 	blks = blks[1:]
 	cids = cids[1:]
-
+fmt.Println("sessions_test.here")
 	// Fetch blocks with the session, 10 at a time
 	for i := 0; i < 10; i++ {
+        fmt.Println("sessions_test.loop", i)
 		ch, err := ses.GetBlocks(ctx, authArray(cids[i*10:(i+1)*10]))
 		if err != nil {
 			t.Fatal(err)
@@ -115,7 +124,7 @@ func TestSessionBetweenPeers(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-
+fmt.Println("sessions_test.here2")
 	// Uninvolved nodes should receive
 	// - initial broadcast want-have of root block
 	// - CANCEL (when Peer A receives the root block from Peer B)
