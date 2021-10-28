@@ -122,13 +122,14 @@ func (bsm *blockstoreManager) getBlocks(ctx context.Context, ws []auth.Want, rem
 	})
 }
 
-func (bsm *blockstoreManager) jobPerKey(ctx context.Context, ws []auth.Want, remote peer.ID, jobFn func(w auth.Want, remote peer.ID)) error {
+func (bsm *blockstoreManager) jobPerKey(ctx context.Context, ws []auth.Want, remote peer.ID, jobFn func(want auth.Want, remote peer.ID)) error {
 	var err error
 	wg := sync.WaitGroup{}
 	for _, w := range ws {
+                t := w
 		wg.Add(1)
 		err = bsm.addJob(ctx, func() {
-			jobFn(w, remote)
+			jobFn(t, remote)
 			wg.Done()
 		})
 		if err != nil {

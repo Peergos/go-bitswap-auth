@@ -8,12 +8,15 @@ import (
 
 	blocks "github.com/ipfs/go-block-format"
 	cid "github.com/ipfs/go-cid"
+        "github.com/peergos/go-bitswap-auth/auth"
 	blocksutil "github.com/ipfs/go-ipfs-blocksutil"
 )
 
 func TestDuplicates(t *testing.T) {
-	b1 := blocks.NewBlock([]byte("1"))
-	b2 := blocks.NewBlock([]byte("2"))
+	rb1 := blocks.NewBlock([]byte("1"))
+	b1 := auth.NewBlock(rb1, auth.NewWant(rb1.Cid(), "auth"))
+	rb2 := blocks.NewBlock([]byte("2"))
+        b2 := auth.NewBlock(rb2, auth.NewWant(rb2.Cid(), "auth"))
 
 	n := New()
 	defer n.Shutdown()
@@ -37,7 +40,8 @@ func TestDuplicates(t *testing.T) {
 }
 
 func TestPublishSubscribe(t *testing.T) {
-	blockSent := blocks.NewBlock([]byte("Greetings from The Interval"))
+	rblockSent := blocks.NewBlock([]byte("Greetings from The Interval"))
+        blockSent := auth.NewBlock(rblockSent, auth.NewWant(rblockSent.Cid(), "auth"))
 
 	n := New()
 	defer n.Shutdown()
@@ -54,8 +58,10 @@ func TestPublishSubscribe(t *testing.T) {
 }
 
 func TestSubscribeMany(t *testing.T) {
-	e1 := blocks.NewBlock([]byte("1"))
-	e2 := blocks.NewBlock([]byte("2"))
+        re1 := blocks.NewBlock([]byte("1"))
+	e1 := auth.NewBlock(re1, auth.NewWant(re1.Cid(), "auth"))
+	re2 := blocks.NewBlock([]byte("2"))
+        e2 := auth.NewBlock(re2, auth.NewWant(re2.Cid(), "auth"))
 
 	n := New()
 	defer n.Shutdown()
@@ -79,7 +85,8 @@ func TestSubscribeMany(t *testing.T) {
 // TestDuplicateSubscribe tests a scenario where a given block
 // would be requested twice at the same time.
 func TestDuplicateSubscribe(t *testing.T) {
-	e1 := blocks.NewBlock([]byte("1"))
+        re1 := blocks.NewBlock([]byte("1"))
+	e1 := auth.NewBlock(re1, auth.NewWant(re1.Cid(), "auth"))
 
 	n := New()
 	defer n.Shutdown()
@@ -101,7 +108,8 @@ func TestDuplicateSubscribe(t *testing.T) {
 }
 
 func TestShutdownBeforeUnsubscribe(t *testing.T) {
-	e1 := blocks.NewBlock([]byte("1"))
+        re1 := blocks.NewBlock([]byte("1"))
+	e1 := auth.NewBlock(re1, auth.NewWant(re1.Cid(), "auth"))
 
 	n := New()
 	ctx, cancel := context.WithCancel(context.Background())
@@ -164,21 +172,21 @@ func TestDoesNotDeadLockIfContextCancelledBeforePublish(t *testing.T) {
 	t.Log("cancel context before any blocks published")
 	cancel()
 	for _, b := range bs {
-		n.Publish(b)
+		n.Publish(auth.NewBlock(b, auth.NewWant(b.Cid(), "auth")))
 	}
 
 	t.Log("publishing the large number of blocks to the ignored channel must not deadlock")
 }
 
-func assertBlockChannelNil(t *testing.T, blockChannel <-chan blocks.Block) {
+func assertBlockChannelNil(t *testing.T, blockChannel <-chan auth.AuthBlock) {
 	_, ok := <-blockChannel
 	if ok {
 		t.Fail()
 	}
 }
 
-func assertBlocksEqual(t *testing.T, a, b blocks.Block) {
-	if !bytes.Equal(a.RawData(), b.RawData()) {
+func assertBlocksEqual(t *testing.T, a, b auth.AuthBlock) {
+	if !bytes.Equal(a.GetAuthedData(), b.GetAuthedData()) {
 		t.Fatal("blocks aren't equal")
 	}
 	if a.Cid() != b.Cid() {

@@ -23,7 +23,7 @@ func TestSimpleBlockExchangeWithAuth(t *testing.T) {
 
 	allowGen := func(i int) func(cid.Cid, peer.ID, string) bool {
 		return func(c cid.Cid, p peer.ID, a string) bool {
-			fmt.Println("Allow-", i, c, a)
+			//fmt.Println("Allow-", i, c, a)
 			return a == valid_auth
 		}
 	}
