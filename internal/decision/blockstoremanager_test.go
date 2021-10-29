@@ -10,7 +10,8 @@ import (
 	cid "github.com/ipfs/go-cid"
 	"github.com/ipfs/go-metrics-interface"
 	"github.com/peergos/go-bitswap-auth/internal/testutil"
-
+        "github.com/peergos/go-bitswap-auth/auth"
+	peer "github.com/libp2p/go-libp2p-core/peer"
 	blocks "github.com/ipfs/go-block-format"
 	ds "github.com/ipfs/go-datastore"
 	"github.com/ipfs/go-datastore/delayed"
@@ -20,6 +21,10 @@ import (
 	process "github.com/jbenet/goprocess"
 )
 
+func allowAll(cid.Cid, peer.ID, string) bool {
+     return true
+}
+
 func newBlockstoreManagerForTesting(
 	ctx context.Context,
 	bs blockstore.Blockstore,
@@ -27,7 +32,8 @@ func newBlockstoreManagerForTesting(
 ) *blockstoreManager {
 	testPendingBlocksGauge := metrics.NewCtx(ctx, "pending_block_tasks", "Total number of pending blockstore tasks").Gauge()
 	testActiveBlocksGauge := metrics.NewCtx(ctx, "active_block_tasks", "Total number of active blockstore tasks").Gauge()
-	return newBlockstoreManager(ctx, bs, workerCount, testPendingBlocksGauge, testActiveBlocksGauge)
+        abs := auth.NewAuthBlockstore(bs, allowAll)
+	return newBlockstoreManager(ctx, abs, workerCount, testPendingBlocksGauge, testActiveBlocksGauge)
 }
 
 func TestBlockstoreManagerNotFoundKey(t *testing.T) {
@@ -39,8 +45,8 @@ func TestBlockstoreManagerNotFoundKey(t *testing.T) {
 	bsm := newBlockstoreManagerForTesting(ctx, bstore, 5)
 	bsm.start(process.WithTeardown(func() error { return nil }))
 
-	cids := testutil.GenerateCids(4)
-	sizes, err := bsm.getBlockSizes(ctx, cids)
+	cids := testutil.GenerateWants(4)
+	sizes, err := bsm.getBlockSizes(ctx, cids, peer.ID("peer"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -54,7 +60,7 @@ func TestBlockstoreManagerNotFoundKey(t *testing.T) {
 		}
 	}
 
-	blks, err := bsm.getBlocks(ctx, cids)
+	blks, err := bsm.getBlocks(ctx, cids, peer.ID("peer"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -93,12 +99,12 @@ func TestBlockstoreManager(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	var cids []cid.Cid
+	var cids []auth.Want
 	for _, b := range blks {
-		cids = append(cids, b.Cid())
+		cids = append(cids, auth.NewWant(b.Cid(), "auth"))
 	}
 
-	sizes, err := bsm.getBlockSizes(ctx, cids)
+	sizes, err := bsm.getBlockSizes(ctx, cids, peer.ID("peer"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -107,7 +113,7 @@ func TestBlockstoreManager(t *testing.T) {
 	}
 
 	for _, c := range cids {
-		expSize := len(exp[c].RawData())
+		expSize := len(exp[c.Cid].RawData())
 		size, ok := sizes[c]
 
 		// Only the last key should be missing
@@ -125,7 +131,7 @@ func TestBlockstoreManager(t *testing.T) {
 		}
 	}
 
-	fetched, err := bsm.getBlocks(ctx, cids)
+	fetched, err := bsm.getBlocks(ctx, cids, peer.ID("peer"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -145,7 +151,7 @@ func TestBlockstoreManager(t *testing.T) {
 			if !ok {
 				t.Fatal("Block should be in blocks map")
 			}
-			if !blk.Cid().Equals(c) {
+			if !blk.Cid().Equals(c.Cid) {
 				t.Fatal("Block has wrong cid")
 			}
 		}
@@ -156,17 +162,18 @@ func TestBlockstoreManagerConcurrency(t *testing.T) {
 	ctx := context.Background()
 	bsdelay := delay.Fixed(3 * time.Millisecond)
 	dstore := ds_sync.MutexWrap(delayed.New(ds.NewMapDatastore(), bsdelay))
-	bstore := blockstore.NewBlockstore(ds_sync.MutexWrap(dstore))
+	rbs := blockstore.NewBlockstore(ds_sync.MutexWrap(dstore))
+        bstore := auth.NewAuthBlockstore(rbs, allowAll)
 
 	workerCount := 5
-	bsm := newBlockstoreManagerForTesting(ctx, bstore, workerCount)
+	bsm := newBlockstoreManagerForTesting(ctx, rbs, workerCount)
 	bsm.start(process.WithTeardown(func() error { return nil }))
 
 	blkSize := int64(8 * 1024)
 	blks := testutil.GenerateBlocksOfSize(32, blkSize)
-	var ks []cid.Cid
+	var ks []auth.Want
 	for _, b := range blks {
-		ks = append(ks, b.Cid())
+		ks = append(ks, auth.NewWant(b.Cid(), "auth"))
 	}
 
 	err := bstore.PutMany(blks)
@@ -182,7 +189,7 @@ func TestBlockstoreManagerConcurrency(t *testing.T) {
 		go func(t *testing.T) {
 			defer wg.Done()
 
-			sizes, err := bsm.getBlockSizes(ctx, ks)
+			sizes, err := bsm.getBlockSizes(ctx, ks, peer.ID("peer"))
 			if err != nil {
 				t.Error(err)
 			}
@@ -199,16 +206,17 @@ func TestBlockstoreManagerClose(t *testing.T) {
 	delayTime := 20 * time.Millisecond
 	bsdelay := delay.Fixed(delayTime)
 	dstore := ds_sync.MutexWrap(delayed.New(ds.NewMapDatastore(), bsdelay))
-	bstore := blockstore.NewBlockstore(ds_sync.MutexWrap(dstore))
+	rbs := blockstore.NewBlockstore(ds_sync.MutexWrap(dstore))
+        bstore := auth.NewAuthBlockstore(rbs, allowAll)
 
-	bsm := newBlockstoreManagerForTesting(ctx, bstore, 3)
+	bsm := newBlockstoreManagerForTesting(ctx, rbs, 3)
 	px := process.WithTeardown(func() error { return nil })
 	bsm.start(px)
 
 	blks := testutil.GenerateBlocksOfSize(10, 1024)
-	var ks []cid.Cid
+	var ks []auth.Want
 	for _, b := range blks {
-		ks = append(ks, b.Cid())
+		ks = append(ks, auth.NewWant(b.Cid(), "auth"))
 	}
 
 	err := bstore.PutMany(blks)
@@ -221,7 +229,7 @@ func TestBlockstoreManagerClose(t *testing.T) {
 	time.Sleep(5 * time.Millisecond)
 
 	before := time.Now()
-	_, err = bsm.getBlockSizes(ctx, ks)
+	_, err = bsm.getBlockSizes(ctx, ks, peer.ID("peer"))
 	if err == nil {
 		t.Error("expected an error")
 	}
@@ -237,7 +245,8 @@ func TestBlockstoreManagerCtxDone(t *testing.T) {
 
 	underlyingDstore := ds_sync.MutexWrap(ds.NewMapDatastore())
 	dstore := delayed.New(underlyingDstore, bsdelay)
-	underlyingBstore := blockstore.NewBlockstore(underlyingDstore)
+	ubs := blockstore.NewBlockstore(underlyingDstore)
+        underlyingBstore := auth.NewAuthBlockstore(ubs, allowAll)
 	bstore := blockstore.NewBlockstore(dstore)
 
 	ctx := context.Background()
@@ -246,9 +255,9 @@ func TestBlockstoreManagerCtxDone(t *testing.T) {
 	bsm.start(proc)
 
 	blks := testutil.GenerateBlocksOfSize(100, 128)
-	var ks []cid.Cid
+	var ks []auth.Want
 	for _, b := range blks {
-		ks = append(ks, b.Cid())
+		ks = append(ks, auth.NewWant(b.Cid(), "auth"))
 	}
 
 	err := underlyingBstore.PutMany(blks)
@@ -260,7 +269,7 @@ func TestBlockstoreManagerCtxDone(t *testing.T) {
 	defer cancel()
 
 	before := time.Now()
-	_, err = bsm.getBlockSizes(ctx, ks)
+	_, err = bsm.getBlockSizes(ctx, ks, peer.ID("peer"))
 	if err == nil {
 		t.Error("expected an error")
 	}
