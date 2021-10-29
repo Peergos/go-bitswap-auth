@@ -41,6 +41,15 @@ func GenerateCids(n int) []cid.Cid {
 	return cids
 }
 
+func GenerateWants(n int) []auth.Want {
+	cids := make([]auth.Want, 0, n)
+	for i := 0; i < n; i++ {
+		c := blockGenerator.Next().Cid()
+		cids = append(cids, auth.NewWant(c, "auth"))
+	}
+	return cids
+}
+
 // GenerateMessageEntries makes fake bitswap message entries.
 func GenerateMessageEntries(n int, isCancel bool) []bsmsg.Entry {
 	bsmsgs := make([]bsmsg.Entry, 0, n)
@@ -111,6 +120,16 @@ func ContainsKey(ks []cid.Cid, c cid.Cid) bool {
 	return false
 }
 
+// ContainsWant returns true if a key is found n a list of CIDs.
+func ContainsWant(ks []auth.Want, c auth.Want) bool {
+	for _, k := range ks {
+		if c == k {
+			return true
+		}
+	}
+	return false
+}
+
 // MatchKeysIgnoreOrder returns true if the lists of CIDs match (even if
 // they're in a different order)
 func MatchKeysIgnoreOrder(ks1 []cid.Cid, ks2 []cid.Cid) bool {
@@ -120,6 +139,21 @@ func MatchKeysIgnoreOrder(ks1 []cid.Cid, ks2 []cid.Cid) bool {
 
 	for _, k := range ks1 {
 		if !ContainsKey(ks2, k) {
+			return false
+		}
+	}
+	return true
+}
+
+// MatchKeysIgnoreOrder returns true if the lists of CIDs match (even if
+// they're in a different order)
+func MatchWantsIgnoreOrder(ks1 []auth.Want, ks2 []auth.Want) bool {
+	if len(ks1) != len(ks2) {
+		return false
+	}
+
+	for _, k := range ks1 {
+		if !ContainsWant(ks2, k) {
 			return false
 		}
 	}
