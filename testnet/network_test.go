@@ -34,7 +34,7 @@ func TestSendMessageAsyncButWaitForResponse(t *testing.T) {
 		msgFromWaiter bsmsg.BitSwapMessage) {
 
 		msgToWaiter := bsmsg.New(true)
-		msgToWaiter.AddBlock(blocks.NewBlock([]byte(expectedStr)))
+		msgToWaiter.AddBlock(blocks.NewBlock([]byte(expectedStr)), "auth")
 		err := waiter.SendMessage(ctx, fromWaiter, msgToWaiter)
 		if err != nil {
 			t.Error(err)
@@ -49,7 +49,7 @@ func TestSendMessageAsyncButWaitForResponse(t *testing.T) {
 		// TODO assert that this came from the correct peer and that the message contents are as expected
 		ok := false
 		for _, b := range msgFromResponder.Blocks() {
-			if string(b.RawData()) == expectedStr {
+			if string(b.GetAuthedData()) == expectedStr {
 				wg.Done()
 				ok = true
 			}
@@ -61,7 +61,7 @@ func TestSendMessageAsyncButWaitForResponse(t *testing.T) {
 	}))
 
 	messageSentAsync := bsmsg.New(true)
-	messageSentAsync.AddBlock(blocks.NewBlock([]byte("data")))
+	messageSentAsync.AddBlock(blocks.NewBlock([]byte("data")), "auth")
 	errSending := waiter.SendMessage(
 		context.Background(), responderPeer.ID(), messageSentAsync)
 	if errSending != nil {
