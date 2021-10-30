@@ -461,7 +461,7 @@ func runDistribution(b *testing.B, instances []testinstance.Instance, blocks []a
 func wrapBlocks(blocks []blocks.Block) []auth.AuthBlock {
 	wrapped := make([]auth.AuthBlock, len(blocks))
 	for i, b := range blocks {
-		wrapped[i] = auth.NewBlock(b, auth.NewWant(b.Cid(), "auth"))
+		wrapped[i] = auth.NewBlock(b, "auth")
 	}
 	return wrapped
 }

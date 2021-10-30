@@ -35,7 +35,7 @@ func TestBasicSessions(t *testing.T) {
 	b := inst[1]
 
 	// Add a block to Peer B
-	if err := b.Blockstore().Put(auth.NewBlock(block, auth.NewWant(block.Cid(), "auth"))); err != nil {
+	if err := b.Blockstore().Put(auth.NewBlock(block, "auth")); err != nil {
 		t.Fatal(err)
 	}
 
@@ -188,7 +188,7 @@ func TestFetchNotConnected(t *testing.T) {
 	// Provide 10 blocks on Peer A
 	blks := bgen.Blocks(10)
 	for _, block := range blks {
-		if err := other.Exchange.HasBlock(auth.NewBlock(block, auth.NewWant(block.Cid(), "auth"))); err != nil {
+		if err := other.Exchange.HasBlock(auth.NewBlock(block, "auth")); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -244,7 +244,7 @@ func TestFetchAfterDisconnect(t *testing.T) {
 
 	firstBlks := blks[:5]
 	for _, block := range firstBlks {
-		if err := peerA.Exchange.HasBlock(auth.NewBlock(block, auth.NewWant(block.Cid(), "auth"))); err != nil {
+		if err := peerA.Exchange.HasBlock(auth.NewBlock(block, "auth")); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -280,7 +280,7 @@ func TestFetchAfterDisconnect(t *testing.T) {
 	// Provide remaining blocks
 	lastBlks := blks[5:]
 	for _, block := range lastBlks {
-		if err := peerA.Exchange.HasBlock(auth.NewBlock(block, auth.NewWant(block.Cid(), "auth"))); err != nil {
+		if err := peerA.Exchange.HasBlock(auth.NewBlock(block, "auth")); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -335,7 +335,7 @@ func TestInterestCacheOverflow(t *testing.T) {
 	// wait to ensure that all the above cids were added to the sessions cache
 	time.Sleep(time.Millisecond * 50)
 
-	if err := b.Exchange.HasBlock(auth.NewBlock(blks[0], auth.NewWant(blks[0].Cid(), "auth"))); err != nil {
+	if err := b.Exchange.HasBlock(auth.NewBlock(blks[0], "auth")); err != nil {
 		t.Fatal(err)
 	}
 
@@ -382,7 +382,7 @@ func TestPutAfterSessionCacheEvict(t *testing.T) {
 	// wait to ensure that all the above cids were added to the sessions cache
 	time.Sleep(time.Millisecond * 50)
 
-	if err := a.Exchange.HasBlock(auth.NewBlock(blks[17], auth.NewWant(blks[17].Cid(), "auth"))); err != nil {
+	if err := a.Exchange.HasBlock(auth.NewBlock(blks[17], "auth")); err != nil {
 		t.Fatal(err)
 	}
 
@@ -424,7 +424,7 @@ func TestMultipleSessions(t *testing.T) {
 	}
 
 	time.Sleep(time.Millisecond * 10)
-	if err := b.Exchange.HasBlock(auth.NewBlock(blk, auth.NewWant(blk.Cid(), "auth"))); err != nil {
+	if err := b.Exchange.HasBlock(auth.NewBlock(blk, "auth")); err != nil {
 		t.Fatal(err)
 	}
 

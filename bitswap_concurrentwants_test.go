@@ -34,7 +34,7 @@ func TestConcurrentWantsWithAuth(t *testing.T) {
 	ig := testinstance.NewTestInstanceGenerator(tn.VirtualNetwork(mockrouting.NewServer(), delay.Fixed(0)), nil, nil, allowGen)
 	nodes := ig.UnconnectedInstances(4)
 	testinstance.ConnectInstances(nodes[1:])
-	nodes[0].Blockstore().Put(auth.NewBlock(my_block, auth.NewWant(my_block.Cid(), valid_auth)))
+	nodes[0].Blockstore().Put(auth.NewBlock(my_block, valid_auth))
 
 	var wg sync.WaitGroup
 	go func() {
