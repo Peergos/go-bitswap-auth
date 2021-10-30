@@ -1067,7 +1067,7 @@ func TestTaggingPeers(t *testing.T) {
 	keys := []string{"a", "b", "c", "d", "e"}
 	for _, letter := range keys {
                 raw := blocks.NewBlock([]byte(letter))
-		block := auth.NewBlock(raw, auth.NewWant(raw.Cid(), "auth"))
+		block := auth.NewBlock(raw, "auth")
 		if err := sanfrancisco.Blockstore.Put(block); err != nil {
 			t.Fatal(err)
 		}
