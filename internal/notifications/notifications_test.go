@@ -14,9 +14,9 @@ import (
 
 func TestDuplicates(t *testing.T) {
 	rb1 := blocks.NewBlock([]byte("1"))
-	b1 := auth.NewBlock(rb1, auth.NewWant(rb1.Cid(), "auth"))
+	b1 := auth.NewBlock(rb1, "auth")
 	rb2 := blocks.NewBlock([]byte("2"))
-        b2 := auth.NewBlock(rb2, auth.NewWant(rb2.Cid(), "auth"))
+        b2 := auth.NewBlock(rb2, "auth")
 
 	n := New()
 	defer n.Shutdown()
@@ -41,7 +41,7 @@ func TestDuplicates(t *testing.T) {
 
 func TestPublishSubscribe(t *testing.T) {
 	rblockSent := blocks.NewBlock([]byte("Greetings from The Interval"))
-        blockSent := auth.NewBlock(rblockSent, auth.NewWant(rblockSent.Cid(), "auth"))
+        blockSent := auth.NewBlock(rblockSent, "auth")
 
 	n := New()
 	defer n.Shutdown()
@@ -59,9 +59,9 @@ func TestPublishSubscribe(t *testing.T) {
 
 func TestSubscribeMany(t *testing.T) {
         re1 := blocks.NewBlock([]byte("1"))
-	e1 := auth.NewBlock(re1, auth.NewWant(re1.Cid(), "auth"))
+	e1 := auth.NewBlock(re1, "auth")
 	re2 := blocks.NewBlock([]byte("2"))
-        e2 := auth.NewBlock(re2, auth.NewWant(re2.Cid(), "auth"))
+        e2 := auth.NewBlock(re2, "auth")
 
 	n := New()
 	defer n.Shutdown()
@@ -86,7 +86,7 @@ func TestSubscribeMany(t *testing.T) {
 // would be requested twice at the same time.
 func TestDuplicateSubscribe(t *testing.T) {
         re1 := blocks.NewBlock([]byte("1"))
-	e1 := auth.NewBlock(re1, auth.NewWant(re1.Cid(), "auth"))
+	e1 := auth.NewBlock(re1, "auth")
 
 	n := New()
 	defer n.Shutdown()
@@ -109,7 +109,7 @@ func TestDuplicateSubscribe(t *testing.T) {
 
 func TestShutdownBeforeUnsubscribe(t *testing.T) {
         re1 := blocks.NewBlock([]byte("1"))
-	e1 := auth.NewBlock(re1, auth.NewWant(re1.Cid(), "auth"))
+	e1 := auth.NewBlock(re1, "auth")
 
 	n := New()
 	ctx, cancel := context.WithCancel(context.Background())
@@ -172,7 +172,7 @@ func TestDoesNotDeadLockIfContextCancelledBeforePublish(t *testing.T) {
 	t.Log("cancel context before any blocks published")
 	cancel()
 	for _, b := range bs {
-		n.Publish(auth.NewBlock(b, auth.NewWant(b.Cid(), "auth")))
+		n.Publish(auth.NewBlock(b, "auth"))
 	}
 
 	t.Log("publishing the large number of blocks to the ignored channel must not deadlock")
