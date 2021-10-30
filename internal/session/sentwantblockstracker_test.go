@@ -8,7 +8,7 @@ import (
 
 func TestSendWantBlocksTracker(t *testing.T) {
 	peers := testutil.GeneratePeers(2)
-	cids := testutil.GenerateCids(2)
+	cids := testutil.GenerateWants(2)
 	swbt := newSentWantBlocksTracker()
 
 	if swbt.haveSentWantBlockTo(peers[0], cids[0]) {

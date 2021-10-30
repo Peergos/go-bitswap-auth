@@ -3,11 +3,12 @@ package session
 import (
 	"context"
 	"sync"
+        "fmt"
 	"testing"
 	"time"
 
 	cid "github.com/ipfs/go-cid"
-	blocksutil "github.com/ipfs/go-ipfs-blocksutil"
+        "github.com/ipfs/go-block-format"
 	delay "github.com/ipfs/go-ipfs-delay"
 	peer "github.com/libp2p/go-libp2p-core/peer"
 	bsbpm "github.com/peergos/go-bitswap-auth/internal/blockpresencemanager"
@@ -16,12 +17,42 @@ import (
 	bssim "github.com/peergos/go-bitswap-auth/internal/sessioninterestmanager"
 	bsspm "github.com/peergos/go-bitswap-auth/internal/sessionpeermanager"
 	"github.com/peergos/go-bitswap-auth/internal/testutil"
+        "github.com/peergos/go-bitswap-auth/auth"
 )
+
+func NewBlockGenerator() BlockGenerator {
+	return BlockGenerator{}
+}
+
+// BlockGenerator generates BasicBlocks on demand.
+// For each instace of BlockGenerator,
+// each new block is different from the previous,
+// although two different instances will produce the same.
+type BlockGenerator struct {
+	seq int
+}
+
+// Next generates a new BasicBlock.
+func (bg *BlockGenerator) Next() auth.AuthBlock {
+	bg.seq++
+        b := blocks.NewBlock([]byte(fmt.Sprint(bg.seq)))
+	return auth.NewBlock(b, auth.NewWant(b.Cid(), "auth"))
+}
+
+// Blocks generates as many BasicBlocks as specified by n.
+func (bg *BlockGenerator) Blocks(n int) []auth.AuthBlock {
+	blocks := make([]auth.AuthBlock, 0, n)
+	for i := 0; i < n; i++ {
+		b := bg.Next()
+		blocks = append(blocks, b)
+	}
+	return blocks
+}
 
 type mockSessionMgr struct {
 	lk            sync.Mutex
 	removeSession bool
-	cancels       []cid.Cid
+	cancels       []auth.Want
 }
 
 func newMockSessionMgr() *mockSessionMgr {
@@ -34,7 +65,7 @@ func (msm *mockSessionMgr) removeSessionCalled() bool {
 	return msm.removeSession
 }
 
-func (msm *mockSessionMgr) cancelled() []cid.Cid {
+func (msm *mockSessionMgr) cancelled() []auth.Want {
 	msm.lk.Lock()
 	defer msm.lk.Unlock()
 	return msm.cancels
@@ -46,7 +77,7 @@ func (msm *mockSessionMgr) RemoveSession(sesid uint64) {
 	msm.removeSession = true
 }
 
-func (msm *mockSessionMgr) CancelSessionWants(sid uint64, wants []cid.Cid) {
+func (msm *mockSessionMgr) CancelSessionWants(sid uint64, wants []auth.Want) {
 	msm.lk.Lock()
 	defer msm.lk.Unlock()
 	msm.cancels = append(msm.cancels, wants...)
@@ -123,7 +154,7 @@ func (fpf *fakeProviderFinder) FindProvidersAsync(ctx context.Context, k cid.Cid
 }
 
 type wantReq struct {
-	cids []cid.Cid
+	cids []auth.Want
 }
 
 type fakePeerManager struct {
@@ -138,14 +169,14 @@ func newFakePeerManager() *fakePeerManager {
 
 func (pm *fakePeerManager) RegisterSession(peer.ID, bspm.Session)                    {}
 func (pm *fakePeerManager) UnregisterSession(uint64)                                 {}
-func (pm *fakePeerManager) SendWants(context.Context, peer.ID, []cid.Cid, []cid.Cid) {}
-func (pm *fakePeerManager) BroadcastWantHaves(ctx context.Context, cids []cid.Cid) {
+func (pm *fakePeerManager) SendWants(context.Context, peer.ID, []auth.Want, []auth.Want) {}
+func (pm *fakePeerManager) BroadcastWantHaves(ctx context.Context, cids []auth.Want) {
 	select {
 	case pm.wantReqs <- wantReq{cids}:
 	case <-ctx.Done():
 	}
 }
-func (pm *fakePeerManager) SendCancels(ctx context.Context, cancels []cid.Cid) {}
+func (pm *fakePeerManager) SendCancels(ctx context.Context, cancels []auth.Want) {}
 
 func TestSessionGetBlocks(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
@@ -159,11 +190,11 @@ func TestSessionGetBlocks(t *testing.T) {
 	id := testutil.GenerateSessionID()
 	sm := newMockSessionMgr()
 	session := New(ctx, sm, id, fspm, fpf, sim, fpm, bpm, notif, time.Second, delay.Fixed(time.Minute), "")
-	blockGenerator := blocksutil.NewBlockGenerator()
+	blockGenerator := NewBlockGenerator()
 	blks := blockGenerator.Blocks(broadcastLiveWantsLimit * 2)
-	var cids []cid.Cid
+	var cids []auth.Want
 	for _, block := range blks {
-		cids = append(cids, block.Cid())
+		cids = append(cids, auth.NewWant(block.Cid(), "auth"))
 	}
 
 	_, err := session.GetBlocks(ctx, cids)
@@ -177,7 +208,7 @@ func TestSessionGetBlocks(t *testing.T) {
 
 	// Should have registered session's interest in blocks
 	intSes := sim.FilterSessionInterested(id, cids)
-	if !testutil.MatchKeysIgnoreOrder(intSes[0], cids) {
+	if !testutil.MatchWantsIgnoreOrder(intSes[0], cids) {
 		t.Fatal("did not register session interest in blocks")
 	}
 
@@ -189,8 +220,8 @@ func TestSessionGetBlocks(t *testing.T) {
 	// Simulate receiving HAVEs from several peers
 	peers := testutil.GeneratePeers(5)
 	for i, p := range peers {
-		blk := blks[testutil.IndexOf(blks, receivedWantReq.cids[i])]
-		session.ReceiveFrom(p, []cid.Cid{}, []cid.Cid{blk.Cid()}, []cid.Cid{})
+		blk := blks[testutil.IndexOfW(blks, receivedWantReq.cids[i])]
+		session.ReceiveFrom(p, []auth.Want{}, []auth.Want{auth.NewWant(blk.Cid(), "auth")}, []auth.Want{})
 	}
 
 	time.Sleep(10 * time.Millisecond)
@@ -207,7 +238,7 @@ func TestSessionGetBlocks(t *testing.T) {
 	}
 
 	// Simulate receiving DONT_HAVE for a CID
-	session.ReceiveFrom(peers[0], []cid.Cid{}, []cid.Cid{}, []cid.Cid{blks[0].Cid()})
+	session.ReceiveFrom(peers[0], []auth.Want{}, []auth.Want{}, []auth.Want{auth.NewWant(blks[0].Cid(), "auth")})
 
 	time.Sleep(10 * time.Millisecond)
 
@@ -218,7 +249,7 @@ func TestSessionGetBlocks(t *testing.T) {
 	}
 
 	// Simulate receiving block for a CID
-	session.ReceiveFrom(peers[1], []cid.Cid{blks[0].Cid()}, []cid.Cid{}, []cid.Cid{})
+	session.ReceiveFrom(peers[1], []auth.Want{blks[0].Want()}, []auth.Want{}, []auth.Want{})
 
 	time.Sleep(10 * time.Millisecond)
 
@@ -256,11 +287,11 @@ func TestSessionFindMorePeers(t *testing.T) {
 	sm := newMockSessionMgr()
 	session := New(ctx, sm, id, fspm, fpf, sim, fpm, bpm, notif, time.Second, delay.Fixed(time.Minute), "")
 	session.SetBaseTickDelay(200 * time.Microsecond)
-	blockGenerator := blocksutil.NewBlockGenerator()
+	blockGenerator := NewBlockGenerator()
 	blks := blockGenerator.Blocks(broadcastLiveWantsLimit * 2)
-	var cids []cid.Cid
+	var cids []auth.Want
 	for _, block := range blks {
-		cids = append(cids, block.Cid())
+		cids = append(cids, block.Want())
 	}
 	_, err := session.GetBlocks(ctx, cids)
 	if err != nil {
@@ -281,7 +312,7 @@ func TestSessionFindMorePeers(t *testing.T) {
 	p := testutil.GeneratePeers(1)[0]
 
 	blk := blks[0]
-	session.ReceiveFrom(p, []cid.Cid{blk.Cid()}, []cid.Cid{}, []cid.Cid{})
+	session.ReceiveFrom(p, []auth.Want{blk.Want()}, []auth.Want{}, []auth.Want{})
 
 	// The session should now time out waiting for a response and broadcast
 	// want-haves again
@@ -330,11 +361,11 @@ func TestSessionOnPeersExhausted(t *testing.T) {
 	id := testutil.GenerateSessionID()
 	sm := newMockSessionMgr()
 	session := New(ctx, sm, id, fspm, fpf, sim, fpm, bpm, notif, time.Second, delay.Fixed(time.Minute), "")
-	blockGenerator := blocksutil.NewBlockGenerator()
+	blockGenerator := NewBlockGenerator()
 	blks := blockGenerator.Blocks(broadcastLiveWantsLimit + 5)
-	var cids []cid.Cid
+	var cids []auth.Want
 	for _, block := range blks {
-		cids = append(cids, block.Cid())
+		cids = append(cids, block.Want())
 	}
 	_, err := session.GetBlocks(ctx, cids)
 
@@ -375,11 +406,11 @@ func TestSessionFailingToGetFirstBlock(t *testing.T) {
 	id := testutil.GenerateSessionID()
 	sm := newMockSessionMgr()
 	session := New(ctx, sm, id, fspm, fpf, sim, fpm, bpm, notif, 10*time.Millisecond, delay.Fixed(100*time.Millisecond), "")
-	blockGenerator := blocksutil.NewBlockGenerator()
+	blockGenerator := NewBlockGenerator()
 	blks := blockGenerator.Blocks(4)
-	var cids []cid.Cid
+	var cids []auth.Want
 	for _, block := range blks {
-		cids = append(cids, block.Cid())
+		cids = append(cids, block.Want())
 	}
 	startTick := time.Now()
 	_, err := session.GetBlocks(ctx, cids)
@@ -407,7 +438,7 @@ func TestSessionFailingToGetFirstBlock(t *testing.T) {
 	// Wait for a request to find more peers to occur
 	select {
 	case k := <-fpf.findMorePeersRequested:
-		if testutil.IndexOf(blks, k) == -1 {
+		if testutil.IndexOfW(blks, auth.NewWant(k, "auth")) == -1 {
 			t.Fatal("did not rebroadcast an active want")
 		}
 	case <-ctx.Done():
@@ -469,7 +500,7 @@ func TestSessionFailingToGetFirstBlock(t *testing.T) {
 	// Wait for rebroadcast to occur
 	select {
 	case k := <-fpf.findMorePeersRequested:
-		if testutil.IndexOf(blks, k) == -1 {
+		if testutil.IndexOfW(blks, auth.NewWant(k, "auth")) == -1 {
 			t.Fatal("did not rebroadcast an active want")
 		}
 	case <-ctx.Done():
@@ -496,12 +527,12 @@ func TestSessionCtxCancelClosesGetBlocksChannel(t *testing.T) {
 	defer timerCancel()
 
 	// Request a block with a new context
-	blockGenerator := blocksutil.NewBlockGenerator()
+	blockGenerator := NewBlockGenerator()
 	blks := blockGenerator.Blocks(1)
 	getctx, getcancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer getcancel()
 
-	getBlocksCh, err := session.GetBlocks(getctx, []cid.Cid{blks[0].Cid()})
+	getBlocksCh, err := session.GetBlocks(getctx, []auth.Want{blks[0].Want()})
 	if err != nil {
 		t.Fatal("error getting blocks")
 	}
@@ -567,9 +598,9 @@ func TestSessionReceiveMessageAfterCtxCancel(t *testing.T) {
 	id := testutil.GenerateSessionID()
 	sm := newMockSessionMgr()
 	session := New(ctx, sm, id, fspm, fpf, sim, fpm, bpm, notif, time.Second, delay.Fixed(time.Minute), "")
-	blockGenerator := blocksutil.NewBlockGenerator()
+	blockGenerator := NewBlockGenerator()
 	blks := blockGenerator.Blocks(2)
-	cids := []cid.Cid{blks[0].Cid(), blks[1].Cid()}
+	cids := []auth.Want{blks[0].Want(), blks[1].Want()}
 
 	_, err := session.GetBlocks(ctx, cids)
 	if err != nil {
@@ -584,7 +615,7 @@ func TestSessionReceiveMessageAfterCtxCancel(t *testing.T) {
 
 	// Simulate receiving block for a CID
 	peer := testutil.GeneratePeers(1)[0]
-	session.ReceiveFrom(peer, []cid.Cid{blks[0].Cid()}, []cid.Cid{}, []cid.Cid{})
+	session.ReceiveFrom(peer, []auth.Want{blks[0].Want()}, []auth.Want{}, []auth.Want{})
 
 	time.Sleep(5 * time.Millisecond)
 

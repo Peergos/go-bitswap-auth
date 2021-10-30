@@ -6,22 +6,22 @@ import (
 	"testing"
 	"time"
 
-	cid "github.com/ipfs/go-cid"
 	peer "github.com/libp2p/go-libp2p-core/peer"
 	bsbpm "github.com/peergos/go-bitswap-auth/internal/blockpresencemanager"
 	bspm "github.com/peergos/go-bitswap-auth/internal/peermanager"
 	bsspm "github.com/peergos/go-bitswap-auth/internal/sessionpeermanager"
 	"github.com/peergos/go-bitswap-auth/internal/testutil"
+        "github.com/peergos/go-bitswap-auth/auth"
 )
 
 type sentWants struct {
 	sync.Mutex
 	p          peer.ID
-	wantHaves  *cid.Set
-	wantBlocks *cid.Set
+	wantHaves  *auth.Set
+	wantBlocks *auth.Set
 }
 
-func (sw *sentWants) add(wantBlocks []cid.Cid, wantHaves []cid.Cid) {
+func (sw *sentWants) add(wantBlocks []auth.Want, wantHaves []auth.Want) {
 	sw.Lock()
 	defer sw.Unlock()
 
@@ -35,12 +35,12 @@ func (sw *sentWants) add(wantBlocks []cid.Cid, wantHaves []cid.Cid) {
 	}
 
 }
-func (sw *sentWants) wantHavesKeys() []cid.Cid {
+func (sw *sentWants) wantHavesKeys() []auth.Want {
 	sw.Lock()
 	defer sw.Unlock()
 	return sw.wantHaves.Keys()
 }
-func (sw *sentWants) wantBlocksKeys() []cid.Cid {
+func (sw *sentWants) wantBlocksKeys() []auth.Want {
 	sw.Lock()
 	defer sw.Unlock()
 	return sw.wantBlocks.Keys()
@@ -77,16 +77,16 @@ func (pm *mockPeerManager) has(p peer.ID, sid uint64) bool {
 }
 
 func (*mockPeerManager) UnregisterSession(uint64)                      {}
-func (*mockPeerManager) BroadcastWantHaves(context.Context, []cid.Cid) {}
-func (*mockPeerManager) SendCancels(context.Context, []cid.Cid)        {}
+func (*mockPeerManager) BroadcastWantHaves(context.Context, []auth.Want) {}
+func (*mockPeerManager) SendCancels(context.Context, []auth.Want)        {}
 
-func (pm *mockPeerManager) SendWants(ctx context.Context, p peer.ID, wantBlocks []cid.Cid, wantHaves []cid.Cid) {
+func (pm *mockPeerManager) SendWants(ctx context.Context, p peer.ID, wantBlocks []auth.Want, wantHaves []auth.Want) {
 	pm.lk.Lock()
 	defer pm.lk.Unlock()
 
 	sw, ok := pm.peerSends[p]
 	if !ok {
-		sw = &sentWants{p: p, wantHaves: cid.NewSet(), wantBlocks: cid.NewSet()}
+		sw = &sentWants{p: p, wantHaves: auth.NewSet(), wantBlocks: auth.NewSet()}
 		pm.peerSends[p] = sw
 	}
 	sw.add(wantBlocks, wantHaves)
@@ -115,10 +115,10 @@ func (pm *mockPeerManager) clearWants() {
 
 type exhaustedPeers struct {
 	lk sync.Mutex
-	ks []cid.Cid
+	ks []auth.Want
 }
 
-func (ep *exhaustedPeers) onPeersExhausted(ks []cid.Cid) {
+func (ep *exhaustedPeers) onPeersExhausted(ks []auth.Want) {
 	ep.lk.Lock()
 	defer ep.lk.Unlock()
 
@@ -132,15 +132,15 @@ func (ep *exhaustedPeers) clear() {
 	ep.ks = nil
 }
 
-func (ep *exhaustedPeers) exhausted() []cid.Cid {
+func (ep *exhaustedPeers) exhausted() []auth.Want {
 	ep.lk.Lock()
 	defer ep.lk.Unlock()
 
-	return append([]cid.Cid{}, ep.ks...)
+	return append([]auth.Want{}, ep.ks...)
 }
 
 func TestSendWants(t *testing.T) {
-	cids := testutil.GenerateCids(4)
+	cids := testutil.GenerateWants(4)
 	peers := testutil.GeneratePeers(1)
 	peerA := peers[0]
 	sid := uint64(1)
@@ -148,8 +148,8 @@ func TestSendWants(t *testing.T) {
 	fpm := newFakeSessionPeerManager()
 	swc := newMockSessionMgr()
 	bpm := bsbpm.New()
-	onSend := func(peer.ID, []cid.Cid, []cid.Cid) {}
-	onPeersExhausted := func([]cid.Cid) {}
+	onSend := func(peer.ID, []auth.Want, []auth.Want) {}
+	onPeersExhausted := func([]auth.Want) {}
 	spm := newSessionWantSender(sid, pm, fpm, swc, bpm, onSend, onPeersExhausted)
 	defer spm.Shutdown()
 
@@ -159,7 +159,7 @@ func TestSendWants(t *testing.T) {
 	blkCids0 := cids[0:2]
 	spm.Add(blkCids0)
 	// peerA: HAVE cid0
-	spm.Update(peerA, []cid.Cid{}, []cid.Cid{cids[0]}, []cid.Cid{})
+	spm.Update(peerA, []auth.Want{}, []auth.Want{cids[0]}, []auth.Want{})
 
 	// Wait for processing to complete
 	peerSends := pm.waitNextWants()
@@ -170,7 +170,7 @@ func TestSendWants(t *testing.T) {
 	if !ok {
 		t.Fatal("Nothing sent to peer")
 	}
-	if !testutil.MatchKeysIgnoreOrder(sw.wantBlocksKeys(), blkCids0) {
+	if !testutil.MatchWantsIgnoreOrder(sw.wantBlocksKeys(), blkCids0) {
 		t.Fatal("Wrong keys")
 	}
 	if len(sw.wantHavesKeys()) > 0 {
@@ -179,7 +179,7 @@ func TestSendWants(t *testing.T) {
 }
 
 func TestSendsWantBlockToOnePeerOnly(t *testing.T) {
-	cids := testutil.GenerateCids(4)
+	cids := testutil.GenerateWants(4)
 	peers := testutil.GeneratePeers(2)
 	peerA := peers[0]
 	peerB := peers[1]
@@ -188,8 +188,8 @@ func TestSendsWantBlockToOnePeerOnly(t *testing.T) {
 	fpm := newFakeSessionPeerManager()
 	swc := newMockSessionMgr()
 	bpm := bsbpm.New()
-	onSend := func(peer.ID, []cid.Cid, []cid.Cid) {}
-	onPeersExhausted := func([]cid.Cid) {}
+	onSend := func(peer.ID, []auth.Want, []auth.Want) {}
+	onPeersExhausted := func([]auth.Want) {}
 	spm := newSessionWantSender(sid, pm, fpm, swc, bpm, onSend, onPeersExhausted)
 	defer spm.Shutdown()
 
@@ -199,7 +199,7 @@ func TestSendsWantBlockToOnePeerOnly(t *testing.T) {
 	blkCids0 := cids[0:2]
 	spm.Add(blkCids0)
 	// peerA: HAVE cid0
-	spm.Update(peerA, []cid.Cid{}, []cid.Cid{cids[0]}, []cid.Cid{})
+	spm.Update(peerA, []auth.Want{}, []auth.Want{cids[0]}, []auth.Want{})
 
 	// Wait for processing to complete
 	peerSends := pm.waitNextWants()
@@ -210,7 +210,7 @@ func TestSendsWantBlockToOnePeerOnly(t *testing.T) {
 	if !ok {
 		t.Fatal("Nothing sent to peer")
 	}
-	if !testutil.MatchKeysIgnoreOrder(sw.wantBlocksKeys(), blkCids0) {
+	if !testutil.MatchWantsIgnoreOrder(sw.wantBlocksKeys(), blkCids0) {
 		t.Fatal("Wrong keys")
 	}
 
@@ -218,7 +218,7 @@ func TestSendsWantBlockToOnePeerOnly(t *testing.T) {
 	pm.clearWants()
 
 	// peerB: HAVE cid0
-	spm.Update(peerB, []cid.Cid{}, []cid.Cid{cids[0]}, []cid.Cid{})
+	spm.Update(peerB, []auth.Want{}, []auth.Want{cids[0]}, []auth.Want{})
 
 	// Wait for processing to complete
 	peerSends = pm.waitNextWants()
@@ -233,13 +233,13 @@ func TestSendsWantBlockToOnePeerOnly(t *testing.T) {
 	if sw.wantBlocks.Len() > 0 {
 		t.Fatal("Expecting no want-blocks")
 	}
-	if !testutil.MatchKeysIgnoreOrder(sw.wantHavesKeys(), blkCids0) {
+	if !testutil.MatchWantsIgnoreOrder(sw.wantHavesKeys(), blkCids0) {
 		t.Fatal("Wrong keys")
 	}
 }
 
 func TestReceiveBlock(t *testing.T) {
-	cids := testutil.GenerateCids(2)
+	cids := testutil.GenerateWants(2)
 	peers := testutil.GeneratePeers(2)
 	peerA := peers[0]
 	peerB := peers[1]
@@ -248,8 +248,8 @@ func TestReceiveBlock(t *testing.T) {
 	fpm := newFakeSessionPeerManager()
 	swc := newMockSessionMgr()
 	bpm := bsbpm.New()
-	onSend := func(peer.ID, []cid.Cid, []cid.Cid) {}
-	onPeersExhausted := func([]cid.Cid) {}
+	onSend := func(peer.ID, []auth.Want, []auth.Want) {}
+	onPeersExhausted := func([]auth.Want) {}
 	spm := newSessionWantSender(sid, pm, fpm, swc, bpm, onSend, onPeersExhausted)
 	defer spm.Shutdown()
 
@@ -258,7 +258,7 @@ func TestReceiveBlock(t *testing.T) {
 	// add cid0, cid1
 	spm.Add(cids)
 	// peerA: HAVE cid0
-	spm.Update(peerA, []cid.Cid{}, []cid.Cid{cids[0]}, []cid.Cid{})
+	spm.Update(peerA, []auth.Want{}, []auth.Want{cids[0]}, []auth.Want{})
 
 	// Wait for processing to complete
 	peerSends := pm.waitNextWants()
@@ -269,7 +269,7 @@ func TestReceiveBlock(t *testing.T) {
 	if !ok {
 		t.Fatal("Nothing sent to peer")
 	}
-	if !testutil.MatchKeysIgnoreOrder(sw.wantBlocksKeys(), cids) {
+	if !testutil.MatchWantsIgnoreOrder(sw.wantBlocksKeys(), cids) {
 		t.Fatal("Wrong keys")
 	}
 
@@ -277,11 +277,11 @@ func TestReceiveBlock(t *testing.T) {
 	pm.clearWants()
 
 	// peerA: block cid0, DONT_HAVE cid1
-	bpm.ReceiveFrom(peerA, []cid.Cid{}, []cid.Cid{cids[1]})
-	spm.Update(peerA, []cid.Cid{cids[0]}, []cid.Cid{}, []cid.Cid{cids[1]})
+	bpm.ReceiveFrom(peerA, []auth.Want{}, []auth.Want{cids[1]})
+	spm.Update(peerA, []auth.Want{cids[0]}, []auth.Want{}, []auth.Want{cids[1]})
 	// peerB: HAVE cid0, cid1
-	bpm.ReceiveFrom(peerB, cids, []cid.Cid{})
-	spm.Update(peerB, []cid.Cid{}, cids, []cid.Cid{})
+	bpm.ReceiveFrom(peerB, cids, []auth.Want{})
+	spm.Update(peerB, []auth.Want{}, cids, []auth.Want{})
 
 	// Wait for processing to complete
 	peerSends = pm.waitNextWants()
@@ -301,14 +301,14 @@ func TestReceiveBlock(t *testing.T) {
 }
 
 func TestCancelWants(t *testing.T) {
-	cids := testutil.GenerateCids(4)
+	cids := testutil.GenerateWants(4)
 	sid := uint64(1)
 	pm := newMockPeerManager()
 	fpm := newFakeSessionPeerManager()
 	swc := newMockSessionMgr()
 	bpm := bsbpm.New()
-	onSend := func(peer.ID, []cid.Cid, []cid.Cid) {}
-	onPeersExhausted := func([]cid.Cid) {}
+	onSend := func(peer.ID, []auth.Want, []auth.Want) {}
+	onPeersExhausted := func([]auth.Want) {}
 	spm := newSessionWantSender(sid, pm, fpm, swc, bpm, onSend, onPeersExhausted)
 	defer spm.Shutdown()
 
@@ -321,7 +321,7 @@ func TestCancelWants(t *testing.T) {
 	time.Sleep(5 * time.Millisecond)
 
 	// cancel cid0, cid2
-	cancelCids := []cid.Cid{cids[0], cids[2]}
+	cancelCids := []auth.Want{cids[0], cids[2]}
 	spm.Cancel(cancelCids)
 
 	// Wait for processing to complete
@@ -329,13 +329,13 @@ func TestCancelWants(t *testing.T) {
 
 	// Should have sent cancels for cid0, cid2
 	sent := swc.cancelled()
-	if !testutil.MatchKeysIgnoreOrder(sent, cancelCids) {
+	if !testutil.MatchWantsIgnoreOrder(sent, cancelCids) {
 		t.Fatal("Wrong keys")
 	}
 }
 
 func TestRegisterSessionWithPeerManager(t *testing.T) {
-	cids := testutil.GenerateCids(2)
+	cids := testutil.GenerateWants(2)
 	peers := testutil.GeneratePeers(2)
 	peerA := peers[0]
 	peerB := peers[1]
@@ -344,8 +344,8 @@ func TestRegisterSessionWithPeerManager(t *testing.T) {
 	fpm := newFakeSessionPeerManager()
 	swc := newMockSessionMgr()
 	bpm := bsbpm.New()
-	onSend := func(peer.ID, []cid.Cid, []cid.Cid) {}
-	onPeersExhausted := func([]cid.Cid) {}
+	onSend := func(peer.ID, []auth.Want, []auth.Want) {}
+	onPeersExhausted := func([]auth.Want) {}
 	spm := newSessionWantSender(sid, pm, fpm, swc, bpm, onSend, onPeersExhausted)
 	defer spm.Shutdown()
 
@@ -375,7 +375,7 @@ func TestRegisterSessionWithPeerManager(t *testing.T) {
 }
 
 func TestProtectConnFirstPeerToSendWantedBlock(t *testing.T) {
-	cids := testutil.GenerateCids(2)
+	cids := testutil.GenerateWants(2)
 	peers := testutil.GeneratePeers(3)
 	peerA := peers[0]
 	peerB := peers[1]
@@ -386,8 +386,8 @@ func TestProtectConnFirstPeerToSendWantedBlock(t *testing.T) {
 	fpm := bsspm.New(1, fpt)
 	swc := newMockSessionMgr()
 	bpm := bsbpm.New()
-	onSend := func(peer.ID, []cid.Cid, []cid.Cid) {}
-	onPeersExhausted := func([]cid.Cid) {}
+	onSend := func(peer.ID, []auth.Want, []auth.Want) {}
+	onPeersExhausted := func([]auth.Want) {}
 	spm := newSessionWantSender(sid, pm, fpm, swc, bpm, onSend, onPeersExhausted)
 	defer spm.Shutdown()
 
@@ -431,7 +431,7 @@ func TestProtectConnFirstPeerToSendWantedBlock(t *testing.T) {
 }
 
 func TestPeerUnavailable(t *testing.T) {
-	cids := testutil.GenerateCids(2)
+	cids := testutil.GenerateWants(2)
 	peers := testutil.GeneratePeers(2)
 	peerA := peers[0]
 	peerB := peers[1]
@@ -440,8 +440,8 @@ func TestPeerUnavailable(t *testing.T) {
 	fpm := newFakeSessionPeerManager()
 	swc := newMockSessionMgr()
 	bpm := bsbpm.New()
-	onSend := func(peer.ID, []cid.Cid, []cid.Cid) {}
-	onPeersExhausted := func([]cid.Cid) {}
+	onSend := func(peer.ID, []auth.Want, []auth.Want) {}
+	onPeersExhausted := func([]auth.Want) {}
 	spm := newSessionWantSender(sid, pm, fpm, swc, bpm, onSend, onPeersExhausted)
 	defer spm.Shutdown()
 
@@ -450,7 +450,7 @@ func TestPeerUnavailable(t *testing.T) {
 	// add cid0, cid1
 	spm.Add(cids)
 	// peerA: HAVE cid0
-	spm.Update(peerA, []cid.Cid{}, []cid.Cid{cids[0]}, []cid.Cid{})
+	spm.Update(peerA, []auth.Want{}, []auth.Want{cids[0]}, []auth.Want{})
 
 	// Wait for processing to complete
 	peerSends := pm.waitNextWants()
@@ -461,7 +461,7 @@ func TestPeerUnavailable(t *testing.T) {
 	if !ok {
 		t.Fatal("Nothing sent to peer")
 	}
-	if !testutil.MatchKeysIgnoreOrder(sw.wantBlocksKeys(), cids) {
+	if !testutil.MatchWantsIgnoreOrder(sw.wantBlocksKeys(), cids) {
 		t.Fatal("Wrong keys")
 	}
 
@@ -469,7 +469,7 @@ func TestPeerUnavailable(t *testing.T) {
 	pm.clearWants()
 
 	// peerB: HAVE cid0
-	spm.Update(peerB, []cid.Cid{}, []cid.Cid{cids[0]}, []cid.Cid{})
+	spm.Update(peerB, []auth.Want{}, []auth.Want{cids[0]}, []auth.Want{})
 
 	// Wait for processing to complete
 	peerSends = pm.waitNextWants()
@@ -492,13 +492,13 @@ func TestPeerUnavailable(t *testing.T) {
 	if !ok {
 		t.Fatal("Nothing sent to peer")
 	}
-	if !testutil.MatchKeysIgnoreOrder(sw.wantBlocksKeys(), cids) {
+	if !testutil.MatchWantsIgnoreOrder(sw.wantBlocksKeys(), cids) {
 		t.Fatal("Wrong keys")
 	}
 }
 
 func TestPeersExhausted(t *testing.T) {
-	cids := testutil.GenerateCids(3)
+	cids := testutil.GenerateWants(3)
 	peers := testutil.GeneratePeers(2)
 	peerA := peers[0]
 	peerB := peers[1]
@@ -507,7 +507,7 @@ func TestPeersExhausted(t *testing.T) {
 	fpm := newFakeSessionPeerManager()
 	swc := newMockSessionMgr()
 	bpm := bsbpm.New()
-	onSend := func(peer.ID, []cid.Cid, []cid.Cid) {}
+	onSend := func(peer.ID, []auth.Want, []auth.Want) {}
 
 	ep := exhaustedPeers{}
 	spm := newSessionWantSender(sid, pm, fpm, swc, bpm, onSend, ep.onPeersExhausted)
@@ -518,19 +518,19 @@ func TestPeersExhausted(t *testing.T) {
 	spm.Add(cids)
 
 	// peerA: HAVE cid0
-	bpm.ReceiveFrom(peerA, []cid.Cid{cids[0]}, []cid.Cid{})
+	bpm.ReceiveFrom(peerA, []auth.Want{cids[0]}, []auth.Want{})
 	// Note: this also registers peer A as being available
-	spm.Update(peerA, []cid.Cid{cids[0]}, []cid.Cid{}, []cid.Cid{})
+	spm.Update(peerA, []auth.Want{cids[0]}, []auth.Want{}, []auth.Want{})
 
 	// peerA: DONT_HAVE cid1
-	bpm.ReceiveFrom(peerA, []cid.Cid{}, []cid.Cid{cids[1]})
-	spm.Update(peerA, []cid.Cid{}, []cid.Cid{}, []cid.Cid{cids[1]})
+	bpm.ReceiveFrom(peerA, []auth.Want{}, []auth.Want{cids[1]})
+	spm.Update(peerA, []auth.Want{}, []auth.Want{}, []auth.Want{cids[1]})
 
 	time.Sleep(5 * time.Millisecond)
 
 	// All available peers (peer A) have sent us a DONT_HAVE for cid1,
 	// so expect that onPeersExhausted() will be called with cid1
-	if !testutil.MatchKeysIgnoreOrder(ep.exhausted(), []cid.Cid{cids[1]}) {
+	if !testutil.MatchWantsIgnoreOrder(ep.exhausted(), []auth.Want{cids[1]}) {
 		t.Fatal("Wrong keys")
 	}
 
@@ -538,13 +538,13 @@ func TestPeersExhausted(t *testing.T) {
 	ep.clear()
 
 	// peerB: HAVE cid0
-	bpm.ReceiveFrom(peerB, []cid.Cid{cids[0]}, []cid.Cid{})
+	bpm.ReceiveFrom(peerB, []auth.Want{cids[0]}, []auth.Want{})
 	// Note: this also registers peer B as being available
-	spm.Update(peerB, []cid.Cid{cids[0]}, []cid.Cid{}, []cid.Cid{})
+	spm.Update(peerB, []auth.Want{cids[0]}, []auth.Want{}, []auth.Want{})
 
 	// peerB: DONT_HAVE cid1, cid2
-	bpm.ReceiveFrom(peerB, []cid.Cid{}, []cid.Cid{cids[1], cids[2]})
-	spm.Update(peerB, []cid.Cid{}, []cid.Cid{}, []cid.Cid{cids[1], cids[2]})
+	bpm.ReceiveFrom(peerB, []auth.Want{}, []auth.Want{cids[1], cids[2]})
+	spm.Update(peerB, []auth.Want{}, []auth.Want{}, []auth.Want{cids[1], cids[2]})
 
 	// Wait for processing to complete
 	pm.waitNextWants()
@@ -557,15 +557,15 @@ func TestPeersExhausted(t *testing.T) {
 	}
 
 	// peerA: DONT_HAVE cid2
-	bpm.ReceiveFrom(peerA, []cid.Cid{}, []cid.Cid{cids[2]})
-	spm.Update(peerA, []cid.Cid{}, []cid.Cid{}, []cid.Cid{cids[2]})
+	bpm.ReceiveFrom(peerA, []auth.Want{}, []auth.Want{cids[2]})
+	spm.Update(peerA, []auth.Want{}, []auth.Want{}, []auth.Want{cids[2]})
 
 	// Wait for processing to complete
 	pm.waitNextWants()
 
 	// All available peers (peer A and peer B) have sent us a DONT_HAVE for
 	// cid2, so expect that onPeersExhausted() will be called with cid2
-	if !testutil.MatchKeysIgnoreOrder(ep.exhausted(), []cid.Cid{cids[2]}) {
+	if !testutil.MatchWantsIgnoreOrder(ep.exhausted(), []auth.Want{cids[2]}) {
 		t.Fatal("Wrong keys")
 	}
 }
@@ -575,7 +575,7 @@ func TestPeersExhausted(t *testing.T) {
 // - the remaining peer becomes unavailable
 // onPeersExhausted should be sent for that CID
 func TestPeersExhaustedLastWaitingPeerUnavailable(t *testing.T) {
-	cids := testutil.GenerateCids(2)
+	cids := testutil.GenerateWants(2)
 	peers := testutil.GeneratePeers(2)
 	peerA := peers[0]
 	peerB := peers[1]
@@ -584,7 +584,7 @@ func TestPeersExhaustedLastWaitingPeerUnavailable(t *testing.T) {
 	fpm := newFakeSessionPeerManager()
 	swc := newMockSessionMgr()
 	bpm := bsbpm.New()
-	onSend := func(peer.ID, []cid.Cid, []cid.Cid) {}
+	onSend := func(peer.ID, []auth.Want, []auth.Want) {}
 
 	ep := exhaustedPeers{}
 	spm := newSessionWantSender(sid, pm, fpm, swc, bpm, onSend, ep.onPeersExhausted)
@@ -595,17 +595,17 @@ func TestPeersExhaustedLastWaitingPeerUnavailable(t *testing.T) {
 	spm.Add(cids)
 
 	// peerA: HAVE cid0
-	bpm.ReceiveFrom(peerA, []cid.Cid{cids[0]}, []cid.Cid{})
+	bpm.ReceiveFrom(peerA, []auth.Want{cids[0]}, []auth.Want{})
 	// Note: this also registers peer A as being available
-	spm.Update(peerA, []cid.Cid{}, []cid.Cid{cids[0]}, []cid.Cid{})
+	spm.Update(peerA, []auth.Want{}, []auth.Want{cids[0]}, []auth.Want{})
 	// peerB: HAVE cid0
-	bpm.ReceiveFrom(peerB, []cid.Cid{cids[0]}, []cid.Cid{})
+	bpm.ReceiveFrom(peerB, []auth.Want{cids[0]}, []auth.Want{})
 	// Note: this also registers peer B as being available
-	spm.Update(peerB, []cid.Cid{}, []cid.Cid{cids[0]}, []cid.Cid{})
+	spm.Update(peerB, []auth.Want{}, []auth.Want{cids[0]}, []auth.Want{})
 
 	// peerA: DONT_HAVE cid1
-	bpm.ReceiveFrom(peerA, []cid.Cid{}, []cid.Cid{cids[1]})
-	spm.Update(peerA, []cid.Cid{}, []cid.Cid{}, []cid.Cid{cids[0]})
+	bpm.ReceiveFrom(peerA, []auth.Want{}, []auth.Want{cids[1]})
+	spm.Update(peerA, []auth.Want{}, []auth.Want{}, []auth.Want{cids[0]})
 
 	time.Sleep(5 * time.Millisecond)
 
@@ -616,7 +616,7 @@ func TestPeersExhaustedLastWaitingPeerUnavailable(t *testing.T) {
 
 	// All remaining peers (peer A) have sent us a DONT_HAVE for cid1,
 	// so expect that onPeersExhausted() will be called with cid1
-	if !testutil.MatchKeysIgnoreOrder(ep.exhausted(), []cid.Cid{cids[1]}) {
+	if !testutil.MatchWantsIgnoreOrder(ep.exhausted(), []auth.Want{cids[1]}) {
 		t.Fatal("Wrong keys")
 	}
 }
@@ -624,7 +624,7 @@ func TestPeersExhaustedLastWaitingPeerUnavailable(t *testing.T) {
 // Tests that when all the peers are removed from the session
 // onPeersExhausted should be called with all outstanding CIDs
 func TestPeersExhaustedAllPeersUnavailable(t *testing.T) {
-	cids := testutil.GenerateCids(3)
+	cids := testutil.GenerateWants(3)
 	peers := testutil.GeneratePeers(2)
 	peerA := peers[0]
 	peerB := peers[1]
@@ -633,7 +633,7 @@ func TestPeersExhaustedAllPeersUnavailable(t *testing.T) {
 	fpm := newFakeSessionPeerManager()
 	swc := newMockSessionMgr()
 	bpm := bsbpm.New()
-	onSend := func(peer.ID, []cid.Cid, []cid.Cid) {}
+	onSend := func(peer.ID, []auth.Want, []auth.Want) {}
 
 	ep := exhaustedPeers{}
 	spm := newSessionWantSender(sid, pm, fpm, swc, bpm, onSend, ep.onPeersExhausted)
@@ -644,11 +644,11 @@ func TestPeersExhaustedAllPeersUnavailable(t *testing.T) {
 	spm.Add(cids)
 
 	// peerA: receive block for cid0 (and register peer A with sessionWantSender)
-	spm.Update(peerA, []cid.Cid{cids[0]}, []cid.Cid{}, []cid.Cid{})
+	spm.Update(peerA, []auth.Want{cids[0]}, []auth.Want{}, []auth.Want{})
 	// peerB: HAVE cid1
-	bpm.ReceiveFrom(peerB, []cid.Cid{cids[0]}, []cid.Cid{})
+	bpm.ReceiveFrom(peerB, []auth.Want{cids[0]}, []auth.Want{})
 	// Note: this also registers peer B as being available
-	spm.Update(peerB, []cid.Cid{}, []cid.Cid{cids[0]}, []cid.Cid{})
+	spm.Update(peerB, []auth.Want{}, []auth.Want{cids[0]}, []auth.Want{})
 
 	time.Sleep(5 * time.Millisecond)
 
@@ -660,21 +660,21 @@ func TestPeersExhaustedAllPeersUnavailable(t *testing.T) {
 
 	// Expect that onPeersExhausted() will be called with all cids for blocks
 	// that have not been received
-	if !testutil.MatchKeysIgnoreOrder(ep.exhausted(), []cid.Cid{cids[1], cids[2]}) {
+	if !testutil.MatchWantsIgnoreOrder(ep.exhausted(), []auth.Want{cids[1], cids[2]}) {
 		t.Fatal("Wrong keys")
 	}
 }
 
 func TestConsecutiveDontHaveLimit(t *testing.T) {
-	cids := testutil.GenerateCids(peerDontHaveLimit + 10)
+	cids := testutil.GenerateWants(peerDontHaveLimit + 10)
 	p := testutil.GeneratePeers(1)[0]
 	sid := uint64(1)
 	pm := newMockPeerManager()
 	fpm := newFakeSessionPeerManager()
 	swc := newMockSessionMgr()
 	bpm := bsbpm.New()
-	onSend := func(peer.ID, []cid.Cid, []cid.Cid) {}
-	onPeersExhausted := func([]cid.Cid) {}
+	onSend := func(peer.ID, []auth.Want, []auth.Want) {}
+	onPeersExhausted := func([]auth.Want) {}
 	spm := newSessionWantSender(sid, pm, fpm, swc, bpm, onSend, onPeersExhausted)
 	defer spm.Shutdown()
 
@@ -684,7 +684,7 @@ func TestConsecutiveDontHaveLimit(t *testing.T) {
 	spm.Add(cids)
 
 	// Receive a block from peer (adds it to the session)
-	spm.Update(p, cids[:1], []cid.Cid{}, []cid.Cid{})
+	spm.Update(p, cids[:1], []auth.Want{}, []auth.Want{})
 
 	// Wait for processing to complete
 	time.Sleep(10 * time.Millisecond)
@@ -696,8 +696,8 @@ func TestConsecutiveDontHaveLimit(t *testing.T) {
 
 	// Receive DONT_HAVEs from peer that do not exceed limit
 	for _, c := range cids[1:peerDontHaveLimit] {
-		bpm.ReceiveFrom(p, []cid.Cid{}, []cid.Cid{c})
-		spm.Update(p, []cid.Cid{}, []cid.Cid{}, []cid.Cid{c})
+		bpm.ReceiveFrom(p, []auth.Want{}, []auth.Want{c})
+		spm.Update(p, []auth.Want{}, []auth.Want{}, []auth.Want{c})
 	}
 
 	// Wait for processing to complete
@@ -710,8 +710,8 @@ func TestConsecutiveDontHaveLimit(t *testing.T) {
 
 	// Receive DONT_HAVEs from peer that exceed limit
 	for _, c := range cids[peerDontHaveLimit:] {
-		bpm.ReceiveFrom(p, []cid.Cid{}, []cid.Cid{c})
-		spm.Update(p, []cid.Cid{}, []cid.Cid{}, []cid.Cid{c})
+		bpm.ReceiveFrom(p, []auth.Want{}, []auth.Want{c})
+		spm.Update(p, []auth.Want{}, []auth.Want{}, []auth.Want{c})
 	}
 
 	// Wait for processing to complete
@@ -724,15 +724,15 @@ func TestConsecutiveDontHaveLimit(t *testing.T) {
 }
 
 func TestConsecutiveDontHaveLimitInterrupted(t *testing.T) {
-	cids := testutil.GenerateCids(peerDontHaveLimit + 10)
+	cids := testutil.GenerateWants(peerDontHaveLimit + 10)
 	p := testutil.GeneratePeers(1)[0]
 	sid := uint64(1)
 	pm := newMockPeerManager()
 	fpm := newFakeSessionPeerManager()
 	swc := newMockSessionMgr()
 	bpm := bsbpm.New()
-	onSend := func(peer.ID, []cid.Cid, []cid.Cid) {}
-	onPeersExhausted := func([]cid.Cid) {}
+	onSend := func(peer.ID, []auth.Want, []auth.Want) {}
+	onPeersExhausted := func([]auth.Want) {}
 	spm := newSessionWantSender(sid, pm, fpm, swc, bpm, onSend, onPeersExhausted)
 	defer spm.Shutdown()
 
@@ -742,7 +742,7 @@ func TestConsecutiveDontHaveLimitInterrupted(t *testing.T) {
 	spm.Add(cids)
 
 	// Receive a block from peer (adds it to the session)
-	spm.Update(p, cids[:1], []cid.Cid{}, []cid.Cid{})
+	spm.Update(p, cids[:1], []auth.Want{}, []auth.Want{})
 
 	// Wait for processing to complete
 	time.Sleep(5 * time.Millisecond)
@@ -757,18 +757,18 @@ func TestConsecutiveDontHaveLimitInterrupted(t *testing.T) {
 	// (but they are not consecutive)
 	for _, c := range cids[1:peerDontHaveLimit] {
 		// DONT_HAVEs
-		bpm.ReceiveFrom(p, []cid.Cid{}, []cid.Cid{c})
-		spm.Update(p, []cid.Cid{}, []cid.Cid{}, []cid.Cid{c})
+		bpm.ReceiveFrom(p, []auth.Want{}, []auth.Want{c})
+		spm.Update(p, []auth.Want{}, []auth.Want{}, []auth.Want{c})
 	}
 	for _, c := range cids[peerDontHaveLimit : peerDontHaveLimit+1] {
 		// HAVEs
-		bpm.ReceiveFrom(p, []cid.Cid{c}, []cid.Cid{})
-		spm.Update(p, []cid.Cid{}, []cid.Cid{c}, []cid.Cid{})
+		bpm.ReceiveFrom(p, []auth.Want{c}, []auth.Want{})
+		spm.Update(p, []auth.Want{}, []auth.Want{c}, []auth.Want{})
 	}
 	for _, c := range cids[peerDontHaveLimit+1:] {
 		// DONT_HAVEs
-		bpm.ReceiveFrom(p, []cid.Cid{}, []cid.Cid{c})
-		spm.Update(p, []cid.Cid{}, []cid.Cid{}, []cid.Cid{c})
+		bpm.ReceiveFrom(p, []auth.Want{}, []auth.Want{c})
+		spm.Update(p, []auth.Want{}, []auth.Want{}, []auth.Want{c})
 	}
 
 	// Wait for processing to complete
@@ -781,15 +781,15 @@ func TestConsecutiveDontHaveLimitInterrupted(t *testing.T) {
 }
 
 func TestConsecutiveDontHaveReinstateAfterRemoval(t *testing.T) {
-	cids := testutil.GenerateCids(peerDontHaveLimit + 10)
+	cids := testutil.GenerateWants(peerDontHaveLimit + 10)
 	p := testutil.GeneratePeers(1)[0]
 	sid := uint64(1)
 	pm := newMockPeerManager()
 	fpm := newFakeSessionPeerManager()
 	swc := newMockSessionMgr()
 	bpm := bsbpm.New()
-	onSend := func(peer.ID, []cid.Cid, []cid.Cid) {}
-	onPeersExhausted := func([]cid.Cid) {}
+	onSend := func(peer.ID, []auth.Want, []auth.Want) {}
+	onPeersExhausted := func([]auth.Want) {}
 	spm := newSessionWantSender(sid, pm, fpm, swc, bpm, onSend, onPeersExhausted)
 	defer spm.Shutdown()
 
@@ -799,7 +799,7 @@ func TestConsecutiveDontHaveReinstateAfterRemoval(t *testing.T) {
 	spm.Add(cids)
 
 	// Receive a block from peer (adds it to the session)
-	spm.Update(p, cids[:1], []cid.Cid{}, []cid.Cid{})
+	spm.Update(p, cids[:1], []auth.Want{}, []auth.Want{})
 
 	// Wait for processing to complete
 	time.Sleep(5 * time.Millisecond)
@@ -811,8 +811,8 @@ func TestConsecutiveDontHaveReinstateAfterRemoval(t *testing.T) {
 
 	// Receive DONT_HAVEs from peer that exceed limit
 	for _, c := range cids[1 : peerDontHaveLimit+2] {
-		bpm.ReceiveFrom(p, []cid.Cid{}, []cid.Cid{c})
-		spm.Update(p, []cid.Cid{}, []cid.Cid{}, []cid.Cid{c})
+		bpm.ReceiveFrom(p, []auth.Want{}, []auth.Want{c})
+		spm.Update(p, []auth.Want{}, []auth.Want{}, []auth.Want{c})
 	}
 
 	// Wait for processing to complete
@@ -824,8 +824,8 @@ func TestConsecutiveDontHaveReinstateAfterRemoval(t *testing.T) {
 	}
 
 	// Receive a HAVE from peer (adds it back into the session)
-	bpm.ReceiveFrom(p, cids[:1], []cid.Cid{})
-	spm.Update(p, []cid.Cid{}, cids[:1], []cid.Cid{})
+	bpm.ReceiveFrom(p, cids[:1], []auth.Want{})
+	spm.Update(p, []auth.Want{}, cids[:1], []auth.Want{})
 
 	// Wait for processing to complete
 	time.Sleep(10 * time.Millisecond)
@@ -835,12 +835,12 @@ func TestConsecutiveDontHaveReinstateAfterRemoval(t *testing.T) {
 		t.Fatal("Expected peer to be available")
 	}
 
-	cids2 := testutil.GenerateCids(peerDontHaveLimit + 10)
+	cids2 := testutil.GenerateWants(peerDontHaveLimit + 10)
 
 	// Receive DONT_HAVEs from peer that don't exceed limit
 	for _, c := range cids2[1:peerDontHaveLimit] {
-		bpm.ReceiveFrom(p, []cid.Cid{}, []cid.Cid{c})
-		spm.Update(p, []cid.Cid{}, []cid.Cid{}, []cid.Cid{c})
+		bpm.ReceiveFrom(p, []auth.Want{}, []auth.Want{c})
+		spm.Update(p, []auth.Want{}, []auth.Want{}, []auth.Want{c})
 	}
 
 	// Wait for processing to complete
@@ -853,8 +853,8 @@ func TestConsecutiveDontHaveReinstateAfterRemoval(t *testing.T) {
 
 	// Receive DONT_HAVEs from peer that exceed limit
 	for _, c := range cids2[peerDontHaveLimit:] {
-		bpm.ReceiveFrom(p, []cid.Cid{}, []cid.Cid{c})
-		spm.Update(p, []cid.Cid{}, []cid.Cid{}, []cid.Cid{c})
+		bpm.ReceiveFrom(p, []auth.Want{}, []auth.Want{c})
+		spm.Update(p, []auth.Want{}, []auth.Want{}, []auth.Want{c})
 	}
 
 	// Wait for processing to complete
@@ -867,15 +867,15 @@ func TestConsecutiveDontHaveReinstateAfterRemoval(t *testing.T) {
 }
 
 func TestConsecutiveDontHaveDontRemoveIfHasWantedBlock(t *testing.T) {
-	cids := testutil.GenerateCids(peerDontHaveLimit + 10)
+	cids := testutil.GenerateWants(peerDontHaveLimit + 10)
 	p := testutil.GeneratePeers(1)[0]
 	sid := uint64(1)
 	pm := newMockPeerManager()
 	fpm := newFakeSessionPeerManager()
 	swc := newMockSessionMgr()
 	bpm := bsbpm.New()
-	onSend := func(peer.ID, []cid.Cid, []cid.Cid) {}
-	onPeersExhausted := func([]cid.Cid) {}
+	onSend := func(peer.ID, []auth.Want, []auth.Want) {}
+	onPeersExhausted := func([]auth.Want) {}
 	spm := newSessionWantSender(sid, pm, fpm, swc, bpm, onSend, onPeersExhausted)
 	defer spm.Shutdown()
 
@@ -885,8 +885,8 @@ func TestConsecutiveDontHaveDontRemoveIfHasWantedBlock(t *testing.T) {
 	spm.Add(cids)
 
 	// Receive a HAVE from peer (adds it to the session)
-	bpm.ReceiveFrom(p, cids[:1], []cid.Cid{})
-	spm.Update(p, []cid.Cid{}, cids[:1], []cid.Cid{})
+	bpm.ReceiveFrom(p, cids[:1], []auth.Want{})
+	spm.Update(p, []auth.Want{}, cids[:1], []auth.Want{})
 
 	// Wait for processing to complete
 	time.Sleep(10 * time.Millisecond)
@@ -898,8 +898,8 @@ func TestConsecutiveDontHaveDontRemoveIfHasWantedBlock(t *testing.T) {
 
 	// Receive DONT_HAVEs from peer that exceed limit
 	for _, c := range cids[1 : peerDontHaveLimit+5] {
-		bpm.ReceiveFrom(p, []cid.Cid{}, []cid.Cid{c})
-		spm.Update(p, []cid.Cid{}, []cid.Cid{}, []cid.Cid{c})
+		bpm.ReceiveFrom(p, []auth.Want{}, []auth.Want{c})
+		spm.Update(p, []auth.Want{}, []auth.Want{}, []auth.Want{c})
 	}
 
 	// Wait for processing to complete

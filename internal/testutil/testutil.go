@@ -105,6 +105,16 @@ func IndexOf(blks []blocks.Block, c cid.Cid) int {
 	return -1
 }
 
+// IndexOf returns the index of a given cid in an array of blocks
+func IndexOfW(blks []auth.AuthBlock, c auth.Want) int {
+	for i, n := range blks {
+		if n.Cid() == c.Cid {
+			return i
+		}
+	}
+	return -1
+}
+
 // ContainsBlock returns true if a block is found n a list of blocks
 func ContainsBlock(blks []blocks.Block, block blocks.Block) bool {
 	return IndexOf(blks, block.Cid()) != -1
