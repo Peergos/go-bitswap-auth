@@ -362,7 +362,7 @@ func (m *impl) addEntry(w auth.Want, priority int32, cancel bool, wantType pb.Me
 func (m *impl) AddBlock(b blocks.Block, a string) {
 	w := auth.Want{Cid: b.Cid(), Auth: a}
 	delete(m.blockPresences, w)
-	m.blocks[w] = auth.NewBlock(b, w)
+	m.blocks[w] = auth.NewBlock(b, a)
 	m.rawData[w] = b.RawData()
 }
 

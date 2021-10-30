@@ -37,65 +37,6 @@ type AuthBlockstore interface {
 	HashOnRead(enabled bool)
 }
 
-var Undef = Want{}
-
-type Want struct {
-	Cid  cid.Cid
-	Auth string
-}
-
-func (w Want) Defined() bool {
-	return w.Cid.Defined()
-}
-
-func (w Want) Equals(b Want) bool {
-	return w.Cid.Equals(b.Cid) && w.Auth == b.Auth
-}
-
-func NewWant(c cid.Cid, a string) Want {
-	return Want{Cid: c, Auth: a}
-}
-
-type AuthBlock interface {
-	Want() Want
-	Cid() cid.Cid
-	Size() int
-	GetAuthedData() []byte
-	Loggable() map[string]interface{}
-}
-
-type AuthBlockImpl struct {
-	want  Want
-	block blocks.Block
-}
-
-func (a AuthBlockImpl) Cid() cid.Cid {
-	return a.block.Cid()
-}
-
-func (a AuthBlockImpl) Want() Want {
-	return a.want
-}
-
-func (a AuthBlockImpl) Size() int {
-	return len(a.block.RawData())
-}
-
-func (a AuthBlockImpl) GetAuthedData() []byte {
-	return a.block.RawData()
-}
-
-func (a AuthBlockImpl) Loggable() map[string]interface{} {
-	return map[string]interface{}{}
-}
-
-func NewBlock(block blocks.Block, w Want) AuthBlock {
-	if block.Cid() != w.Cid {
-		panic("want doesn't match block!")
-	}
-	return AuthBlockImpl{block: block, want: w}
-}
-
 type AuthedBlockstore struct {
 	source blockstore.Blockstore
 	allow  func(cid.Cid, peer.ID, string) bool

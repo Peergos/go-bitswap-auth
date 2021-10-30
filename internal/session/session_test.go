@@ -36,7 +36,7 @@ type BlockGenerator struct {
 func (bg *BlockGenerator) Next() auth.AuthBlock {
 	bg.seq++
         b := blocks.NewBlock([]byte(fmt.Sprint(bg.seq)))
-	return auth.NewBlock(b, auth.NewWant(b.Cid(), "auth"))
+	return auth.NewBlock(b, "auth")
 }
 
 // Blocks generates as many BasicBlocks as specified by n.
