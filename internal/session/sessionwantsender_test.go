@@ -121,7 +121,6 @@ type exhaustedPeers struct {
 func (ep *exhaustedPeers) onPeersExhausted(ks []auth.Want) {
 	ep.lk.Lock()
 	defer ep.lk.Unlock()
-
 	ep.ks = append(ep.ks, ks...)
 }
 

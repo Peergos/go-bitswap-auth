@@ -383,7 +383,7 @@ func (sws *sessionWantSender) processUpdates(updates []update) []auth.Want {
 			blkCids.Add(c)
 
 			// Remove the want
-			removed := sws.removeWant(c, upd.from)
+			removed := sws.removeWant(c)
 			if removed != nil {
 				// Inform the peer tracker that this peer was the first to send
 				// us the block
@@ -634,12 +634,10 @@ func (sws *sessionWantSender) newlyExhausted(ws []auth.Want) []auth.Want {
 }
 
 // removeWant is called when the corresponding block is received
-func (sws *sessionWantSender) removeWant(w auth.Want, from peer.ID) *wantInfo {
+func (sws *sessionWantSender) removeWant(w auth.Want) *wantInfo {
 	if wi, ok := sws.wants[w]; ok {
-		if wi.sentTo == from {
-			delete(sws.wants, w)
-			return wi
-		}
+		delete(sws.wants, w)
+		return wi
 	}
 	return nil
 }
