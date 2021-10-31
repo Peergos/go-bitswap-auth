@@ -2,7 +2,6 @@ package bitswap_test
 
 import (
 	"context"
-	"fmt"
 	"testing"
 	"time"
 
@@ -63,7 +62,9 @@ func TestSimpleBlockExchangeWithAuth(t *testing.T) {
 	} else if my_block.Cid() != received_block.Cid() {
 		t.Fatal("expected to receive a block with the same CID that I requested")
 	}
-	fmt.Println("received_block=", string(received_block.GetAuthedData()[:]))
+        if received_block.Cid() != my_block.Cid() {
+           t.Fatal("Incorrect block returned!")
+        }
 
 	//test that I only receive a block from a peer when I provide the correct auth string
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
