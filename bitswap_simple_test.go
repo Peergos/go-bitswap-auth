@@ -9,14 +9,20 @@ import (
 	cid "github.com/ipfs/go-cid"
 	delay "github.com/ipfs/go-ipfs-delay"
 	mockrouting "github.com/ipfs/go-ipfs-routing/mock"
+	u "github.com/ipfs/go-ipfs-util"
 	peer "github.com/libp2p/go-libp2p-core/peer"
 	"github.com/peergos/go-bitswap-auth/auth"
 	testinstance "github.com/peergos/go-bitswap-auth/testinstance"
 	tn "github.com/peergos/go-bitswap-auth/testnet"
 )
 
+func NewBlock(data []byte) *blocks.BasicBlock {
+	b, _ := blocks.NewBlockWithCid(data, cid.NewCidV1(cid.Raw, u.Hash(data)))
+	return b
+}
+
 func TestSimpleBlockExchangeWithAuth(t *testing.T) {
-	my_block := blocks.NewBlock([]byte{'t', 'e', 's', 't'})
+	my_block := NewBlock([]byte{'t', 'e', 's', 't'})
 	invalid_auth := "bad-auth"
 	valid_auth := "good-auth"
 
@@ -62,9 +68,9 @@ func TestSimpleBlockExchangeWithAuth(t *testing.T) {
 	} else if my_block.Cid() != received_block.Cid() {
 		t.Fatal("expected to receive a block with the same CID that I requested")
 	}
-        if received_block.Cid() != my_block.Cid() {
-           t.Fatal("Incorrect block returned!")
-        }
+	if received_block.Cid() != my_block.Cid() {
+		t.Fatal("Incorrect block returned!")
+	}
 
 	//test that I only receive a block from a peer when I provide the correct auth string
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)

@@ -8,15 +8,15 @@ import (
 
 	blocks "github.com/ipfs/go-block-format"
 	cid "github.com/ipfs/go-cid"
-        "github.com/peergos/go-bitswap-auth/auth"
 	blocksutil "github.com/ipfs/go-ipfs-blocksutil"
+	"github.com/peergos/go-bitswap-auth/auth"
 )
 
 func TestDuplicates(t *testing.T) {
 	rb1 := blocks.NewBlock([]byte("1"))
 	b1 := auth.NewBlock(rb1, "auth")
 	rb2 := blocks.NewBlock([]byte("2"))
-        b2 := auth.NewBlock(rb2, "auth")
+	b2 := auth.NewBlock(rb2, "auth")
 
 	n := New()
 	defer n.Shutdown()
@@ -41,7 +41,7 @@ func TestDuplicates(t *testing.T) {
 
 func TestPublishSubscribe(t *testing.T) {
 	rblockSent := blocks.NewBlock([]byte("Greetings from The Interval"))
-        blockSent := auth.NewBlock(rblockSent, "auth")
+	blockSent := auth.NewBlock(rblockSent, "auth")
 
 	n := New()
 	defer n.Shutdown()
@@ -58,10 +58,10 @@ func TestPublishSubscribe(t *testing.T) {
 }
 
 func TestSubscribeMany(t *testing.T) {
-        re1 := blocks.NewBlock([]byte("1"))
+	re1 := blocks.NewBlock([]byte("1"))
 	e1 := auth.NewBlock(re1, "auth")
 	re2 := blocks.NewBlock([]byte("2"))
-        e2 := auth.NewBlock(re2, "auth")
+	e2 := auth.NewBlock(re2, "auth")
 
 	n := New()
 	defer n.Shutdown()
@@ -85,7 +85,7 @@ func TestSubscribeMany(t *testing.T) {
 // TestDuplicateSubscribe tests a scenario where a given block
 // would be requested twice at the same time.
 func TestDuplicateSubscribe(t *testing.T) {
-        re1 := blocks.NewBlock([]byte("1"))
+	re1 := blocks.NewBlock([]byte("1"))
 	e1 := auth.NewBlock(re1, "auth")
 
 	n := New()
@@ -108,7 +108,7 @@ func TestDuplicateSubscribe(t *testing.T) {
 }
 
 func TestShutdownBeforeUnsubscribe(t *testing.T) {
-        re1 := blocks.NewBlock([]byte("1"))
+	re1 := blocks.NewBlock([]byte("1"))
 	e1 := auth.NewBlock(re1, "auth")
 
 	n := New()

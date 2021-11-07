@@ -12,9 +12,9 @@ import (
 
 	"github.com/benbjohnson/clock"
 	"github.com/ipfs/go-metrics-interface"
+	"github.com/peergos/go-bitswap-auth/auth"
 	"github.com/peergos/go-bitswap-auth/internal/defaults"
 	"github.com/peergos/go-bitswap-auth/internal/testutil"
-	"github.com/peergos/go-bitswap-auth/auth"
 	message "github.com/peergos/go-bitswap-auth/message"
 	pb "github.com/peergos/go-bitswap-auth/message/pb"
 
@@ -100,7 +100,7 @@ func newTestEngine(ctx context.Context, idStr string) engineSet {
 func newTestEngineWithSampling(ctx context.Context, idStr string, peerSampleInterval time.Duration, sampleCh chan struct{}, clock clock.Clock) engineSet {
 	fpt := &fakePeerTagger{}
 	bs := blockstore.NewBlockstore(dssync.MutexWrap(ds.NewMapDatastore()))
-        abs := auth.NewAuthBlockstore(bs, allowAll)
+	abs := auth.NewAuthBlockstore(bs, allowAll)
 	e := newEngineForTesting(ctx, bs, 4, defaults.BitswapEngineTaskWorkerCount, defaults.BitswapMaxOutstandingBytesPerPeer, fpt, "localhost", 0, NewTestScoreLedger(peerSampleInterval, sampleCh, clock))
 	e.StartWorkers(ctx, process.WithTeardown(func() error { return nil }))
 	return engineSet{
@@ -913,7 +913,7 @@ func TestPartnerWantsThenCancels(t *testing.T) {
 
 func TestSendReceivedBlocksToPeersThatWantThem(t *testing.T) {
 	rbs := blockstore.NewBlockstore(dssync.MutexWrap(ds.NewMapDatastore()))
-        bs := auth.NewAuthBlockstore(rbs, allowAll)
+	bs := auth.NewAuthBlockstore(rbs, allowAll)
 	partner := libp2ptest.RandPeerIDFatal(t)
 	otherPeer := libp2ptest.RandPeerIDFatal(t)
 
@@ -1066,7 +1066,7 @@ func TestTaggingPeers(t *testing.T) {
 
 	keys := []string{"a", "b", "c", "d", "e"}
 	for _, letter := range keys {
-                raw := blocks.NewBlock([]byte(letter))
+		raw := blocks.NewBlock([]byte(letter))
 		block := auth.NewBlock(raw, "auth")
 		if err := sanfrancisco.Blockstore.Put(block); err != nil {
 			t.Fatal(err)

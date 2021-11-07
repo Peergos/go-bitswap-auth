@@ -9,8 +9,8 @@ import (
 
 	"github.com/benbjohnson/clock"
 	"github.com/libp2p/go-libp2p/p2p/protocol/ping"
+	"github.com/peergos/go-bitswap-auth/auth"
 	"github.com/peergos/go-bitswap-auth/internal/testutil"
-        "github.com/peergos/go-bitswap-auth/auth"
 )
 
 type mockPeerConn struct {

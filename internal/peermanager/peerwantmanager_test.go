@@ -4,8 +4,8 @@ import (
 	"testing"
 
 	peer "github.com/libp2p/go-libp2p-core/peer"
+	"github.com/peergos/go-bitswap-auth/auth"
 	"github.com/peergos/go-bitswap-auth/internal/testutil"
-        "github.com/peergos/go-bitswap-auth/auth"
 )
 
 type gauge struct {

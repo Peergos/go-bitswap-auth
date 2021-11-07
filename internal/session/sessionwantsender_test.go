@@ -7,11 +7,11 @@ import (
 	"time"
 
 	peer "github.com/libp2p/go-libp2p-core/peer"
+	"github.com/peergos/go-bitswap-auth/auth"
 	bsbpm "github.com/peergos/go-bitswap-auth/internal/blockpresencemanager"
 	bspm "github.com/peergos/go-bitswap-auth/internal/peermanager"
 	bsspm "github.com/peergos/go-bitswap-auth/internal/sessionpeermanager"
 	"github.com/peergos/go-bitswap-auth/internal/testutil"
-        "github.com/peergos/go-bitswap-auth/auth"
 )
 
 type sentWants struct {
@@ -76,7 +76,7 @@ func (pm *mockPeerManager) has(p peer.ID, sid uint64) bool {
 	return false
 }
 
-func (*mockPeerManager) UnregisterSession(uint64)                      {}
+func (*mockPeerManager) UnregisterSession(uint64)                        {}
 func (*mockPeerManager) BroadcastWantHaves(context.Context, []auth.Want) {}
 func (*mockPeerManager) SendCancels(context.Context, []auth.Want)        {}
 

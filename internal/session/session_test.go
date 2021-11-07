@@ -2,22 +2,22 @@ package session
 
 import (
 	"context"
+	"fmt"
 	"sync"
-        "fmt"
 	"testing"
 	"time"
 
+	"github.com/ipfs/go-block-format"
 	cid "github.com/ipfs/go-cid"
-        "github.com/ipfs/go-block-format"
 	delay "github.com/ipfs/go-ipfs-delay"
 	peer "github.com/libp2p/go-libp2p-core/peer"
+	"github.com/peergos/go-bitswap-auth/auth"
 	bsbpm "github.com/peergos/go-bitswap-auth/internal/blockpresencemanager"
 	notifications "github.com/peergos/go-bitswap-auth/internal/notifications"
 	bspm "github.com/peergos/go-bitswap-auth/internal/peermanager"
 	bssim "github.com/peergos/go-bitswap-auth/internal/sessioninterestmanager"
 	bsspm "github.com/peergos/go-bitswap-auth/internal/sessionpeermanager"
 	"github.com/peergos/go-bitswap-auth/internal/testutil"
-        "github.com/peergos/go-bitswap-auth/auth"
 )
 
 func NewBlockGenerator() BlockGenerator {
@@ -35,7 +35,7 @@ type BlockGenerator struct {
 // Next generates a new BasicBlock.
 func (bg *BlockGenerator) Next() auth.AuthBlock {
 	bg.seq++
-        b := blocks.NewBlock([]byte(fmt.Sprint(bg.seq)))
+	b := blocks.NewBlock([]byte(fmt.Sprint(bg.seq)))
 	return auth.NewBlock(b, "auth")
 }
 
@@ -167,8 +167,8 @@ func newFakePeerManager() *fakePeerManager {
 	}
 }
 
-func (pm *fakePeerManager) RegisterSession(peer.ID, bspm.Session)                    {}
-func (pm *fakePeerManager) UnregisterSession(uint64)                                 {}
+func (pm *fakePeerManager) RegisterSession(peer.ID, bspm.Session)                        {}
+func (pm *fakePeerManager) UnregisterSession(uint64)                                     {}
 func (pm *fakePeerManager) SendWants(context.Context, peer.ID, []auth.Want, []auth.Want) {}
 func (pm *fakePeerManager) BroadcastWantHaves(ctx context.Context, cids []auth.Want) {
 	select {

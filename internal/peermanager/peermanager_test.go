@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/peergos/go-bitswap-auth/auth"
 	"github.com/peergos/go-bitswap-auth/internal/testutil"
-        "github.com/peergos/go-bitswap-auth/auth"
 
 	"github.com/libp2p/go-libp2p-core/peer"
 )
@@ -326,10 +326,10 @@ type benchPeerQueue struct {
 func (*benchPeerQueue) Startup()  {}
 func (*benchPeerQueue) Shutdown() {}
 
-func (*benchPeerQueue) AddBroadcastWantHaves(whs []auth.Want)   {}
+func (*benchPeerQueue) AddBroadcastWantHaves(whs []auth.Want)     {}
 func (*benchPeerQueue) AddWants(wbs []auth.Want, whs []auth.Want) {}
-func (*benchPeerQueue) AddCancels(cs []auth.Want)               {}
-func (*benchPeerQueue) ResponseReceived(ks []auth.Want)         {}
+func (*benchPeerQueue) AddCancels(cs []auth.Want)                 {}
+func (*benchPeerQueue) ResponseReceived(ks []auth.Want)           {}
 
 // Simplistic benchmark to allow us to stress test
 func BenchmarkPeerManager(b *testing.B) {

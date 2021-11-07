@@ -3,8 +3,8 @@ package sessioninterestmanager
 import (
 	"testing"
 
+	"github.com/peergos/go-bitswap-auth/auth"
 	"github.com/peergos/go-bitswap-auth/internal/testutil"
-        "github.com/peergos/go-bitswap-auth/auth"
 )
 
 func TestEmpty(t *testing.T) {

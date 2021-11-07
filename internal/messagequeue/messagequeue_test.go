@@ -15,9 +15,9 @@ import (
 
 	peer "github.com/libp2p/go-libp2p-core/peer"
 	"github.com/libp2p/go-libp2p/p2p/protocol/ping"
+	"github.com/peergos/go-bitswap-auth/auth"
 	bsmsg "github.com/peergos/go-bitswap-auth/message"
 	bsnet "github.com/peergos/go-bitswap-auth/network"
-        "github.com/peergos/go-bitswap-auth/auth"
 )
 
 type fakeMessageNetwork struct {

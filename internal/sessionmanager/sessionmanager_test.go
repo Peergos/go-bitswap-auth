@@ -9,13 +9,13 @@ import (
 
 	delay "github.com/ipfs/go-ipfs-delay"
 
+	"github.com/peergos/go-bitswap-auth/auth"
 	bsbpm "github.com/peergos/go-bitswap-auth/internal/blockpresencemanager"
 	notifications "github.com/peergos/go-bitswap-auth/internal/notifications"
 	bspm "github.com/peergos/go-bitswap-auth/internal/peermanager"
 	bssession "github.com/peergos/go-bitswap-auth/internal/session"
 	bssim "github.com/peergos/go-bitswap-auth/internal/sessioninterestmanager"
 	"github.com/peergos/go-bitswap-auth/internal/testutil"
-        "github.com/peergos/go-bitswap-auth/auth"
 
 	blocks "github.com/ipfs/go-block-format"
 	peer "github.com/libp2p/go-libp2p-core/peer"
@@ -65,10 +65,10 @@ type fakePeerManager struct {
 	cancels []auth.Want
 }
 
-func (*fakePeerManager) RegisterSession(peer.ID, bspm.Session)                    {}
-func (*fakePeerManager) UnregisterSession(uint64)                                 {}
+func (*fakePeerManager) RegisterSession(peer.ID, bspm.Session)                        {}
+func (*fakePeerManager) UnregisterSession(uint64)                                     {}
 func (*fakePeerManager) SendWants(context.Context, peer.ID, []auth.Want, []auth.Want) {}
-func (*fakePeerManager) BroadcastWantHaves(context.Context, []auth.Want)            {}
+func (*fakePeerManager) BroadcastWantHaves(context.Context, []auth.Want)              {}
 func (fpm *fakePeerManager) SendCancels(ctx context.Context, cancels []auth.Want) {
 	fpm.lk.Lock()
 	defer fpm.lk.Unlock()
@@ -126,7 +126,7 @@ func TestReceiveFrom(t *testing.T) {
 	secondSession := sm.NewSession(ctx, time.Second, delay.Fixed(time.Minute)).(*fakeSession)
 	thirdSession := sm.NewSession(ctx, time.Second, delay.Fixed(time.Minute)).(*fakeSession)
 
-        w := auth.NewWant(block.Cid(), "auth")
+	w := auth.NewWant(block.Cid(), "auth")
 	sim.RecordSessionInterest(firstSession.ID(), []auth.Want{w})
 	sim.RecordSessionInterest(thirdSession.ID(), []auth.Want{w})
 

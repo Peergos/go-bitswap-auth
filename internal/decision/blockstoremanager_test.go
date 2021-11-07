@@ -7,22 +7,22 @@ import (
 	"testing"
 	"time"
 
-	cid "github.com/ipfs/go-cid"
-	"github.com/ipfs/go-metrics-interface"
-	"github.com/peergos/go-bitswap-auth/internal/testutil"
-        "github.com/peergos/go-bitswap-auth/auth"
-	peer "github.com/libp2p/go-libp2p-core/peer"
 	blocks "github.com/ipfs/go-block-format"
+	cid "github.com/ipfs/go-cid"
 	ds "github.com/ipfs/go-datastore"
 	"github.com/ipfs/go-datastore/delayed"
 	ds_sync "github.com/ipfs/go-datastore/sync"
 	blockstore "github.com/ipfs/go-ipfs-blockstore"
 	delay "github.com/ipfs/go-ipfs-delay"
+	"github.com/ipfs/go-metrics-interface"
 	process "github.com/jbenet/goprocess"
+	peer "github.com/libp2p/go-libp2p-core/peer"
+	"github.com/peergos/go-bitswap-auth/auth"
+	"github.com/peergos/go-bitswap-auth/internal/testutil"
 )
 
 func allowAll(cid.Cid, peer.ID, string) bool {
-     return true
+	return true
 }
 
 func newBlockstoreManagerForTesting(
@@ -32,7 +32,7 @@ func newBlockstoreManagerForTesting(
 ) *blockstoreManager {
 	testPendingBlocksGauge := metrics.NewCtx(ctx, "pending_block_tasks", "Total number of pending blockstore tasks").Gauge()
 	testActiveBlocksGauge := metrics.NewCtx(ctx, "active_block_tasks", "Total number of active blockstore tasks").Gauge()
-        abs := auth.NewAuthBlockstore(bs, allowAll)
+	abs := auth.NewAuthBlockstore(bs, allowAll)
 	return newBlockstoreManager(ctx, abs, workerCount, testPendingBlocksGauge, testActiveBlocksGauge)
 }
 
@@ -163,7 +163,7 @@ func TestBlockstoreManagerConcurrency(t *testing.T) {
 	bsdelay := delay.Fixed(3 * time.Millisecond)
 	dstore := ds_sync.MutexWrap(delayed.New(ds.NewMapDatastore(), bsdelay))
 	rbs := blockstore.NewBlockstore(ds_sync.MutexWrap(dstore))
-        bstore := auth.NewAuthBlockstore(rbs, allowAll)
+	bstore := auth.NewAuthBlockstore(rbs, allowAll)
 
 	workerCount := 5
 	bsm := newBlockstoreManagerForTesting(ctx, rbs, workerCount)
@@ -207,7 +207,7 @@ func TestBlockstoreManagerClose(t *testing.T) {
 	bsdelay := delay.Fixed(delayTime)
 	dstore := ds_sync.MutexWrap(delayed.New(ds.NewMapDatastore(), bsdelay))
 	rbs := blockstore.NewBlockstore(ds_sync.MutexWrap(dstore))
-        bstore := auth.NewAuthBlockstore(rbs, allowAll)
+	bstore := auth.NewAuthBlockstore(rbs, allowAll)
 
 	bsm := newBlockstoreManagerForTesting(ctx, rbs, 3)
 	px := process.WithTeardown(func() error { return nil })
@@ -246,7 +246,7 @@ func TestBlockstoreManagerCtxDone(t *testing.T) {
 	underlyingDstore := ds_sync.MutexWrap(ds.NewMapDatastore())
 	dstore := delayed.New(underlyingDstore, bsdelay)
 	ubs := blockstore.NewBlockstore(underlyingDstore)
-        underlyingBstore := auth.NewAuthBlockstore(ubs, allowAll)
+	underlyingBstore := auth.NewAuthBlockstore(ubs, allowAll)
 	bstore := blockstore.NewBlockstore(dstore)
 
 	ctx := context.Background()

@@ -4,8 +4,8 @@ import (
 	"testing"
 
 	cid "github.com/ipfs/go-cid"
-        "github.com/peergos/go-bitswap-auth/internal/testutil"
-        "github.com/peergos/go-bitswap-auth/auth"
+	"github.com/peergos/go-bitswap-auth/auth"
+	"github.com/peergos/go-bitswap-auth/internal/testutil"
 )
 
 func TestEmptySessionWants(t *testing.T) {

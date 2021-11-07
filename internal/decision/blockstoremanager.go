@@ -126,7 +126,7 @@ func (bsm *blockstoreManager) jobPerKey(ctx context.Context, ws []auth.Want, rem
 	var err error
 	wg := sync.WaitGroup{}
 	for _, w := range ws {
-                t := w
+		t := w
 		wg.Add(1)
 		err = bsm.addJob(ctx, func() {
 			jobFn(t, remote)

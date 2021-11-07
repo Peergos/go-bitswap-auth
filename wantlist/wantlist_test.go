@@ -4,8 +4,8 @@ import (
 	"testing"
 
 	cid "github.com/ipfs/go-cid"
+	"github.com/peergos/go-bitswap-auth/auth"
 	pb "github.com/peergos/go-bitswap-auth/message/pb"
-        "github.com/peergos/go-bitswap-auth/auth"
 )
 
 var testcids []auth.Want

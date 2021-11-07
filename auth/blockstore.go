@@ -59,6 +59,10 @@ func (bs *AuthedBlockstore) DeleteBlock(c cid.Cid) error {
 }
 
 func (bs *AuthedBlockstore) Has(c cid.Cid) (bool, error) {
+	codec := c.Type()
+	if codec != cid.Raw && codec != cid.DagCBOR {
+		return false, nil
+	}
 	return bs.source.Has(c)
 }
 
