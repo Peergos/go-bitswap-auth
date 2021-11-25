@@ -48,6 +48,13 @@ func NewAuthBlockstore(bstore blockstore.Blockstore, allow func(cid.Cid, peer.ID
 }
 
 func (bs *AuthedBlockstore) Get(c cid.Cid, remote peer.ID, auth string) (blocks.Block, error) {
+        local, err := bs.source.Has(c)
+        if err != nil {
+           return nil, err
+        }
+        if !local {
+           return nil, blockstore.ErrNotFound
+        }
 	if bs.allow(c, remote, auth) {
 		return bs.source.Get(c)
 	}
