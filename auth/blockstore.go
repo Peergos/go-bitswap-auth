@@ -39,11 +39,11 @@ type AuthBlockstore interface {
 
 type AuthedBlockstore struct {
 	source blockstore.Blockstore
-	allow  func(cid.Cid, peer.ID, string) bool
+	allow  func(cid.Cid, []byte, peer.ID, string) bool
 	AuthBlockstore
 }
 
-func NewAuthBlockstore(bstore blockstore.Blockstore, allow func(cid.Cid, peer.ID, string) bool) AuthBlockstore {
+func NewAuthBlockstore(bstore blockstore.Blockstore, allow func(cid.Cid, []byte, peer.ID, string) bool) AuthBlockstore {
 	return &AuthedBlockstore{source: bstore, allow: allow}
 }
 
@@ -55,8 +55,12 @@ func (bs *AuthedBlockstore) Get(c cid.Cid, remote peer.ID, auth string) (blocks.
         if !local {
            return nil, blockstore.ErrNotFound
         }
-	if bs.allow(c, remote, auth) {
-		return bs.source.Get(c)
+        block, err := bs.source.Get(c)
+        if err != nil {
+           return nil, ErrUnauthorised
+        }
+	if bs.allow(c, block.RawData(), remote, auth) {
+		return block, nil
 	}
 	return nil, ErrUnauthorised
 }

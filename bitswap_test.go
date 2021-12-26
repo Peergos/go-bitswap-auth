@@ -38,8 +38,8 @@ func getVirtualNetwork() tn.Network {
 	return tn.VirtualNetwork(mockrouting.NewServer(), delay.Fixed(kNetworkDelay))
 }
 
-func allowAll(i int) func(cid.Cid, peer.ID, string) bool {
-	return func(c cid.Cid, p peer.ID, a string) bool {
+func allowAll(i int) func(cid.Cid, []byte, peer.ID, string) bool {
+	return func(c cid.Cid, b []byte, p peer.ID, a string) bool {
 		return true
 	}
 }

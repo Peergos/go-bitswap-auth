@@ -153,8 +153,8 @@ func BenchmarkFetchFromOldBitswap(b *testing.B) {
 			oldProtocol := []protocol.ID{bsnet.ProtocolBitswapOneOne}
 			oldNetOpts := []bsnet.NetOpt{bsnet.SupportedProtocols(oldProtocol)}
 			oldBsOpts := []bitswap.Option{bitswap.SetSendDontHaves(false)}
-			allow := func(i int) func(cid.Cid, peer.ID, string) bool {
-				return func(c cid.Cid, p peer.ID, a string) bool {
+			allow := func(i int) func(cid.Cid, []byte, peer.ID, string) bool {
+				return func(c cid.Cid, b []byte, p peer.ID, a string) bool {
 					return true
 				}
 			}
@@ -303,8 +303,8 @@ func BenchmarkDatacenterMultiLeechMultiSeed(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			net := tn.RateLimitedVirtualNetwork(mockrouting.NewServer(), d, rateLimitGenerator)
 
-			allow := func(i int) func(cid.Cid, peer.ID, string) bool {
-				return func(c cid.Cid, p peer.ID, a string) bool {
+			allow := func(i int) func(cid.Cid, []byte, peer.ID, string) bool {
+				return func(c cid.Cid, b []byte, p peer.ID, a string) bool {
 					return true
 				}
 			}
@@ -326,8 +326,8 @@ func subtestDistributeAndFetch(b *testing.B, numnodes, numblks int, d delay.D, b
 	for i := 0; i < b.N; i++ {
 		net := tn.VirtualNetwork(mockrouting.NewServer(), d)
 
-		allow := func(i int) func(cid.Cid, peer.ID, string) bool {
-			return func(c cid.Cid, p peer.ID, a string) bool {
+		allow := func(i int) func(cid.Cid, []byte, peer.ID, string) bool {
+			return func(c cid.Cid, b []byte, p peer.ID, a string) bool {
 				return true
 			}
 		}
@@ -347,8 +347,8 @@ func subtestDistributeAndFetchRateLimited(b *testing.B, numnodes, numblks int, d
 	for i := 0; i < b.N; i++ {
 		net := tn.RateLimitedVirtualNetwork(mockrouting.NewServer(), d, rateLimitGenerator)
 
-		allow := func(i int) func(cid.Cid, peer.ID, string) bool {
-			return func(c cid.Cid, p peer.ID, a string) bool {
+		allow := func(i int) func(cid.Cid, []byte, peer.ID, string) bool {
+			return func(c cid.Cid, b []byte, p peer.ID, a string) bool {
 				return true
 			}
 		}

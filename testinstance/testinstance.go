@@ -21,7 +21,7 @@ import (
 
 // NewTestInstanceGenerator generates a new InstanceGenerator for the given
 // testnet
-func NewTestInstanceGenerator(net tn.Network, netOptions []bsnet.NetOpt, bsOptions []bitswap.Option, allowGen func(int) func(cid.Cid, peer.ID, string) bool) InstanceGenerator {
+func NewTestInstanceGenerator(net tn.Network, netOptions []bsnet.NetOpt, bsOptions []bitswap.Option, allowGen func(int) func(cid.Cid, []byte, peer.ID, string) bool) InstanceGenerator {
 	ctx, cancel := context.WithCancel(context.Background())
 	return InstanceGenerator{
 		net:        net,
@@ -42,7 +42,7 @@ type InstanceGenerator struct {
 	cancel     context.CancelFunc
 	bsOptions  []bitswap.Option
 	netOptions []bsnet.NetOpt
-	allowGen   func(int) func(cid.Cid, peer.ID, string) bool
+	allowGen   func(int) func(cid.Cid, []byte, peer.ID, string) bool
 }
 
 // Close closes the clobal context, shutting down all test instances
@@ -123,7 +123,7 @@ func (i *Instance) SetBlockstoreLatency(t time.Duration) time.Duration {
 // NB: It's easy make mistakes by providing the same peer ID to two different
 // instances. To safeguard, use the InstanceGenerator to generate instances. It's
 // just a much better idea.
-func NewInstance(ctx context.Context, net tn.Network, p tnet.Identity, netOptions []bsnet.NetOpt, bsOptions []bitswap.Option, allow func(cid.Cid, peer.ID, string) bool) Instance {
+func NewInstance(ctx context.Context, net tn.Network, p tnet.Identity, netOptions []bsnet.NetOpt, bsOptions []bitswap.Option, allow func(cid.Cid, []byte, peer.ID, string) bool) Instance {
 	bsdelay := delay.Fixed(0)
 
 	adapter := net.Adapter(p, netOptions...)

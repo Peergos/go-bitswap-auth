@@ -26,8 +26,8 @@ func TestSimpleBlockExchangeWithAuth(t *testing.T) {
 	invalid_auth := "bad-auth"
 	valid_auth := "good-auth"
 
-	allowGen := func(i int) func(cid.Cid, peer.ID, string) bool {
-		return func(c cid.Cid, p peer.ID, a string) bool {
+	allowGen := func(i int) func(cid.Cid, []byte, peer.ID, string) bool {
+		return func(c cid.Cid, b []byte, p peer.ID, a string) bool {
 			//fmt.Println("Allow-", i, c, a)
 			return a == valid_auth
 		}
