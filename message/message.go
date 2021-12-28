@@ -3,6 +3,7 @@ package message
 import (
 	"encoding/binary"
 	"errors"
+        "encoding/hex"
 	"io"
 	"strings"
 
@@ -115,9 +116,10 @@ func (e *Entry) Size() int {
 
 // Get the entry in protobuf form
 func (e *Entry) ToPB() pb.Message_Wantlist_Entry {
+        auth,_ := hex.DecodeString(e.Want.Auth)
 	return pb.Message_Wantlist_Entry{
 		Block:        pb.Cid{Cid: e.Want.Cid},
-		Auth:         e.Want.Auth,
+		Auth:         auth,
 		Priority:     int32(e.Priority),
 		Cancel:       e.Cancel,
 		WantType:     e.WantType,
@@ -207,7 +209,7 @@ func newMessageFromProto(pbm pb.Message) (BitSwapMessage, error) {
 		if !e.Block.Cid.Defined() {
 			return nil, errCidMissing
 		}
-		m.addEntry(auth.Want{Cid: e.Block.Cid, Auth: e.Auth}, e.Priority, e.Cancel, e.WantType, e.SendDontHave)
+		m.addEntry(auth.Want{Cid: e.Block.Cid, Auth: hex.EncodeToString(e.Auth)}, e.Priority, e.Cancel, e.WantType, e.SendDontHave)
 	}
 
 	// deprecated
@@ -234,14 +236,14 @@ func newMessageFromProto(pbm pb.Message) (BitSwapMessage, error) {
 			return nil, err
 		}
 
-		m.AddBlock(blk, b.Auth)
+		m.AddBlock(blk, hex.EncodeToString(b.Auth))
 	}
 
 	for _, bi := range pbm.GetBlockPresences() {
 		if !bi.Cid.Cid.Defined() {
 			return nil, errCidMissing
 		}
-		w := auth.Want{Cid: bi.Cid.Cid, Auth: bi.Auth}
+		w := auth.Want{Cid: bi.Cid.Cid, Auth: hex.EncodeToString(bi.Auth)}
 		m.AddBlockPresence(w, bi.Type)
 	}
 
@@ -395,9 +397,10 @@ func (m *impl) Size() int {
 }
 
 func BlockPresenceSize(w auth.Want) int {
+        auth,_ := hex.DecodeString(w.Auth)
 	return (&pb.Message_BlockPresence{
 		Cid:  pb.Cid{Cid: w.Cid},
-		Auth: w.Auth,
+		Auth: auth,
 		Type: pb.Message_Have,
 	}).Size()
 }
@@ -452,18 +455,20 @@ func (m *impl) ToProtoV1() *pb.Message {
 	blocks := m.Blocks()
 	pbm.Payload = make([]pb.Message_Block, 0, len(blocks))
 	for c, b := range m.blocks {
+                auth,_ := hex.DecodeString(b.Want().Auth)
 		pbm.Payload = append(pbm.Payload, pb.Message_Block{
 			Data:   m.rawData[c],
 			Prefix: b.Cid().Prefix().Bytes(),
-			Auth:   b.Want().Auth,
+			Auth:   auth,
 		})
 	}
 
 	pbm.BlockPresences = make([]pb.Message_BlockPresence, 0, len(m.blockPresences))
 	for c, t := range m.blockPresences {
+                auth,_ := hex.DecodeString(c.Auth)
 		pbm.BlockPresences = append(pbm.BlockPresences, pb.Message_BlockPresence{
 			Cid:  pb.Cid{Cid: c.Cid},
-			Auth: c.Auth,
+			Auth: auth,
 			Type: t,
 		})
 	}
