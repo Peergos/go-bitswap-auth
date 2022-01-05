@@ -3,6 +3,7 @@ package message
 import (
 	"bytes"
 	"testing"
+        "encoding/hex"
 
 	blocks "github.com/ipfs/go-block-format"
 	cid "github.com/ipfs/go-cid"
@@ -14,7 +15,8 @@ import (
 )
 
 func mkFakeCid(s string) auth.Want {
-	return auth.NewWant(cid.NewCidV0(u.Hash([]byte(s))), "auth")
+hex.EncodeToString(nil)
+	return auth.NewWant(cid.NewCidV0(u.Hash([]byte(s))), "1234634abf")
 }
 
 func TestAppendWanted(t *testing.T) {
@@ -30,8 +32,9 @@ func TestAppendWanted(t *testing.T) {
 func TestNewMessageFromProto(t *testing.T) {
 	str := mkFakeCid("a_key")
 	protoMessage := new(pb.Message)
+        auth,_ := hex.DecodeString(str.Auth)
 	protoMessage.Wantlist.Entries = []pb.Message_Wantlist_Entry{
-		{Block: pb.Cid{Cid: str.Cid}, Auth: str.Auth},
+		{Block: pb.Cid{Cid: str.Cid}, Auth: auth},
 	}
 	if !wantlistContains(&protoMessage.Wantlist, str) {
 		t.Fail()
@@ -166,7 +169,7 @@ func TestToAndFromNetMessage(t *testing.T) {
 
 func wantlistContains(wantlist *pb.Message_Wantlist, w auth.Want) bool {
 	for _, e := range wantlist.GetEntries() {
-		if e.Block.Cid.Defined() && w.Cid.Equals(e.Block.Cid) && w.Auth == e.Auth {
+		if e.Block.Cid.Defined() && w.Cid.Equals(e.Block.Cid) && w.Auth == hex.EncodeToString(e.Auth) {
 			return true
 		}
 	}
