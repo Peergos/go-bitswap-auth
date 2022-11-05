@@ -21,7 +21,7 @@ import (
 	blocks "github.com/ipfs/go-block-format"
 	ds "github.com/ipfs/go-datastore"
 	dssync "github.com/ipfs/go-datastore/sync"
-	blockstore "github.com/ipfs/go-ipfs-blockstore"
+	blockstore "github.com/peergos/go-ipfs-blockstore"
 	process "github.com/jbenet/goprocess"
 	peer "github.com/libp2p/go-libp2p-core/peer"
 	libp2ptest "github.com/libp2p/go-libp2p-core/test"

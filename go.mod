@@ -9,7 +9,7 @@ require (
 	github.com/ipfs/go-cid v0.0.7
 	github.com/ipfs/go-datastore v0.4.5
 	github.com/ipfs/go-detect-race v0.0.1
-	github.com/ipfs/go-ipfs-blockstore v0.1.6
+	github.com/peergos/go-ipfs-blockstore v0.1.7
 	github.com/ipfs/go-ipfs-blocksutil v0.0.1
 	github.com/ipfs/go-ipfs-delay v0.0.1
 	github.com/ipfs/go-ipfs-routing v0.1.0

@@ -12,7 +12,7 @@ import (
 	ds "github.com/ipfs/go-datastore"
 	"github.com/ipfs/go-datastore/delayed"
 	ds_sync "github.com/ipfs/go-datastore/sync"
-	blockstore "github.com/ipfs/go-ipfs-blockstore"
+	blockstore "github.com/peergos/go-ipfs-blockstore"
 	delay "github.com/ipfs/go-ipfs-delay"
 	"github.com/ipfs/go-metrics-interface"
 	process "github.com/jbenet/goprocess"
