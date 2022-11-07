@@ -16,6 +16,7 @@ type AuthBlockstore interface {
 	DeleteBlock(cid.Cid) error
 	Has(cid.Cid) (bool, error)
 	Get(cid.Cid, peer.ID, string) (blocks.Block, error)
+	BloomAdd(cid.Cid) error
 
 	// GetSize returns the CIDs mapped BlockSize
 	GetSize(cid.Cid) (int, error)
@@ -67,6 +68,10 @@ func (bs *AuthedBlockstore) Get(c cid.Cid, remote peer.ID, auth string) (blocks.
 
 func (bs *AuthedBlockstore) DeleteBlock(c cid.Cid) error {
 	return bs.source.DeleteBlock(c)
+}
+
+func (bs *AuthedBlockstore) BloomAdd(c cid.Cid) error {
+	return bs.source.BloomAdd(c)
 }
 
 func (bs *AuthedBlockstore) Has(c cid.Cid) (bool, error) {
